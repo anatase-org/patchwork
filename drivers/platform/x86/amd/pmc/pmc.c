@@ -794,7 +794,7 @@ static void amd_pmc_s2idle_check(void)
 
 	if (!pdev->is_first_check_after_suspend ||
 	    amd_pmc_want_suspend_delay(pdev))
-		msleep(2500);
+		msleep(500);
 
 	/* Dump the IdleMask before we add to the STB */
 	amd_pmc_idlemask_read(pdev, pdev->dev, NULL);
