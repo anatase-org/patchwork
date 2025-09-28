@@ -739,6 +739,7 @@ struct smu_context {
 	uint32_t pstate_mclk;
 
 	bool od_enabled;
+	bool od_tainted;
 	struct smu_ppt_limit_context ppt_limits;
 
 	/* soft pptable */
