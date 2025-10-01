@@ -1,0 +1,73 @@
+config AYN
+    tristate "AYN Platform Driver"
+    help
+        AYN platform driver for Linux. Link:
+        https://github.com/ShadowBlip/ayn-platform
+
+config AYANEO
+    tristate "AYANEO Legacy Platform Driver"
+    help
+        AYANEO Legacy platform driver for Linux. Link:
+        https://github.com/ShadowBlip/ayaneo-platform
+
+config BMI260
+    tristate "BMI260 Legacy Driver"
+    help
+        BMI260 driver for Linux. Link:
+        https://github.com/hhd-dev/bmi260
+
+config XONE
+    tristate "XONE Driver"
+    help
+        XONE driver for Linux. Link:
+        https://github.com/anatase-org/xone
+
+config FANATEC
+    tristate "Fanatec Driver"
+    help
+        Fanatec driver for Linux. Link:
+        https://github.com/gotzl/hid-fanatecff
+
+config LG4FF
+    tristate "New LG4FF Driver"
+    help
+        New LG4FF driver for Linux. Link:
+        https://github.com/berarma/new-lg4ff
+
+config TMFF2
+    tristate "New TMFF Driver"
+    help
+        New TMFF driver for Linux. Link:
+        https://github.com/Kimplul/hid-tmff2
+
+config T150
+    tristate "T150 Driver"
+    help
+        T150 driver for Linux. Link:
+        https://github.com/scarburato/t150_driver
+
+config RAZER
+    tristate "OpenRazer Driver"
+    help
+        OpenRazer driver for Linux. Link:
+        https://openrazer.github.io/
+
+config S76
+    tristate "System76 Driver"
+    help
+        System76 driver for Linux. Link:
+        https://github.com/pop-os/system76-dkms
+
+config S76IO
+    tristate "System76 IO Driver"
+    help
+        System76 IO driver for Linux. Link:
+        https://github.com/pop-os/system76-io-dkms
+
+source "drivers/custom/evdi/module/Kconfig"
+
+config V4L2LOOP
+    tristate "V4L2Loopback Driver"
+    help
+        V4L2Loopback driver for Linux. Link:
+        https://github.com/umlaeute/v4l2loopback

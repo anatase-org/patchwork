@@ -1,0 +1,42 @@
+[submodule "drivers/custom/ayn_platform"]
+	path = drivers/custom/ayn_platform
+	url = https://github.com/ShadowBlip/ayn-platform
+[submodule "drivers/custom/ayaneo_platform"]
+	path = drivers/custom/ayaneo_platform
+	url = https://github.com/ShadowBlip/ayaneo-platform
+[submodule "drivers/custom/bmi260"]
+	path = drivers/custom/bmi260
+	url = https://github.com/hhd-dev/bmi260
+[submodule "drivers/custom/xone"]
+	path = drivers/custom/xone
+	url = https://github.com/anatase-org/xone
+[submodule "drivers/custom/razer"]
+	path = drivers/custom/razer
+	url = https://github.com/ublue-os/openrazer.git
+[submodule "drivers/custom/v4l2loopback"]
+	path = drivers/custom/v4l2loopback
+	url = https://github.com/umlaeute/v4l2loopback
+[submodule "drivers/custom/evdi"]
+	path = drivers/custom/evdi
+	url = https://github.com/DisplayLink/evdi
+[submodule "drivers/custom/lg4ff"]
+	path = drivers/custom/lg4ff
+	url = https://github.com/berarma/new-lg4ff
+[submodule "drivers/custom/system76"]
+	path = drivers/custom/system76
+	url = https://github.com/pop-os/system76-dkms
+[submodule "drivers/custom/system76_io"]
+	path = drivers/custom/system76_io
+	url = https://github.com/pop-os/system76-io-dkms
+[submodule "drivers/custom/facetimehd"]
+	path = drivers/custom/facetimehd
+	url = https://github.com/patjak/facetimehd/
+[submodule "drivers/custom/fanatecff"]
+	path = drivers/custom/fanatecff
+	url = https://github.com/gotzl/hid-fanatecff
+[submodule "drivers/custom/hid-tmff2"]
+	path = drivers/custom/hid-tmff2
+	url = https://github.com/Kimplul/hid-tmff2
+[submodule "drivers/custom/t150"]
+	path = drivers/custom/t150
+	url = https://github.com/scarburato/t150_driver
