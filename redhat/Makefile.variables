@@ -219,3 +219,6 @@ ZSTREAM ?= no
 # Nvidia version to build
 NVIDIAVERSION ?= 615.71.09-an01
 NVIDIAVERSIONREL ?= 1
+
+# ZFS version to build
+ZFSVERSION ?= 2.4.4
