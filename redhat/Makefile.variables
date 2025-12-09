@@ -215,3 +215,7 @@ UPSTREAMBUILD_GIT_ONLY ?=
 #  number will be incremented instead of the Y).
 #
 ZSTREAM ?= no
+
+# Nvidia version to build
+NVIDIAVERSION ?= 615.71.09-an01
+NVIDIAVERSIONREL ?= 1
