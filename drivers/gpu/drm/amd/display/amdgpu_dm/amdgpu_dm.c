@@ -13340,8 +13340,8 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
 	struct dpcd_caps dpcd_caps = {0};
 	const struct edid *edid;
 	bool freesync_capable = false;
+	bool pcon_allowed = false;
 	bool is_pcon = false;
-	enum adaptive_sync_type as_type = ADAPTIVE_SYNC_TYPE_NONE;
 
 	if (!connector->state) {
 		drm_err(adev_to_drm(adev), "%s - Connector has no state", __func__);
@@ -13377,6 +13377,7 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
 	if (amdgpu_dm_connector->dc_link) {
 		dpcd_caps = amdgpu_dm_connector->dc_link->dpcd_caps;
 		is_pcon = dpcd_caps.dongle_type == DISPLAY_DONGLE_DP_HDMI_CONVERTER;
+		pcon_allowed = dm_helpers_is_vrr_pcon_compatible(amdgpu_dm_connector->dc_link);
 	}
 
 	/* Copy current range and do not touch display_info afterwards */
@@ -13415,16 +13416,11 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
 		   drm_edid && vsdb_info.freesync_supported) {
 		aconn_range_from_vsdb(amdgpu_dm_connector, &vsdb_info);
 		freesync_capable = is_freesync_capable(amdgpu_dm_connector);
-	}
-
-	if (amdgpu_dm_connector->dc_link && is_pcon)
-		as_type = dm_get_adaptive_sync_support_type(amdgpu_dm_connector->dc_link);
 
 	/* DP -> HDMI PCON */
-	if (as_type == FREESYNC_TYPE_PCON_IN_WHITELIST && drm_edid &&
-	    vsdb_info.freesync_supported) {
+	} else if (pcon_allowed && drm_edid && vsdb_info.freesync_supported) {
+		amdgpu_dm_connector->as_type = FREESYNC_TYPE_PCON_IN_WHITELIST;
 		amdgpu_dm_connector->pack_sdp_v1_3 = true;
-		amdgpu_dm_connector->as_type = as_type;
 		amdgpu_dm_connector->vsdb_info = vsdb_info;
 
 		aconn_range_from_vsdb(amdgpu_dm_connector, &vsdb_info);
