@@ -59,6 +59,7 @@ enum adaptive_sync_type {
 	FREESYNC_TYPE_PCON_IN_WHITELIST          = 2,
 	FREESYNC_TYPE_PCON_NOT_IN_WHITELIST      = 3,
 	ADAPTIVE_SYNC_TYPE_EDP                   = 4,
+	ADAPTIVE_SYNC_TYPE_HDMI                  = 5,
 };
 
 enum adaptive_sync_sdp_version {

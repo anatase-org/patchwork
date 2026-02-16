@@ -9646,7 +9646,9 @@ static void update_freesync_state_on_stream(
 
 	aconn = (struct amdgpu_dm_connector *)new_stream->dm_stream_context;
 
-	if (aconn && (aconn->as_type == FREESYNC_TYPE_PCON_IN_WHITELIST ||
+	if (aconn && aconn->as_type == ADAPTIVE_SYNC_TYPE_HDMI) {
+		packet_type = PACKET_TYPE_VTEM;
+	} else if (aconn && (aconn->as_type == FREESYNC_TYPE_PCON_IN_WHITELIST ||
 		      aconn->vsdb_info.replay_mode)) {
 		struct drm_connector *connector = &aconn->base;
 		pack_sdp_v1_3 = aconn->pack_sdp_v1_3;
@@ -13371,12 +13373,20 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
 
 	} else if (drm_edid && sink->sink_signal == SIGNAL_TYPE_HDMI_TYPE_A) {
 		i = parse_hdmi_amd_vsdb(amdgpu_dm_connector, edid, &vsdb_info);
-		if (i >= 0 && vsdb_info.freesync_supported) {
+		if (hdmi_vrr.supported) {
+			monitor_range_from_hdmi(&connector->display_info, &vsdb_info);
+			amdgpu_dm_connector->as_type = ADAPTIVE_SYNC_TYPE_HDMI;
+			amdgpu_dm_connector->min_vfreq =
+				connector->display_info.monitor_range.min_vfreq;
+			amdgpu_dm_connector->max_vfreq =
+				connector->display_info.monitor_range.max_vfreq;
+			if (amdgpu_dm_connector->max_vfreq - amdgpu_dm_connector->min_vfreq > 10)
+				freesync_capable = true;
+		} else if (i >= 0 && vsdb_info.freesync_supported) {
 			amdgpu_dm_connector->min_vfreq = vsdb_info.min_refresh_rate_hz;
 			amdgpu_dm_connector->max_vfreq = vsdb_info.max_refresh_rate_hz;
 			if (amdgpu_dm_connector->max_vfreq - amdgpu_dm_connector->min_vfreq > 10)
 				freesync_capable = true;
-
 			connector->display_info.monitor_range.min_vfreq = vsdb_info.min_refresh_rate_hz;
 			connector->display_info.monitor_range.max_vfreq = vsdb_info.max_refresh_rate_hz;
 		}

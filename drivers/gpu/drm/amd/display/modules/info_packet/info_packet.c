@@ -662,6 +662,7 @@ void mod_build_adaptive_sync_infopacket(const struct dc_stream_state *stream,
 		break;
 	case ADAPTIVE_SYNC_TYPE_NONE:
 	case FREESYNC_TYPE_PCON_NOT_IN_WHITELIST:
+	case ADAPTIVE_SYNC_TYPE_HDMI:
 	default:
 		break;
 	}
@@ -699,4 +700,3 @@ void mod_build_adaptive_sync_infopacket_v2(const struct dc_stream_state *stream,
 		info_packet->sb[6] = param->decrease.frame_duration_hex;
 	}
 }
-
