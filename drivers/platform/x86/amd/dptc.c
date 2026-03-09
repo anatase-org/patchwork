@@ -86,6 +86,111 @@ static const struct dptc_param_desc dptc_params[DPTC_NUM_PARAMS] = {
 				 1, ALIB_ID_TEMP_TARGET },
 };
 
+/* 15W class: AYANEO AIR (Ryzen 5 5560U) */
+static const struct dptc_device_limits limits_15w = {
+	.params = {
+		[DPTC_PPT_PL1_SPL]  = {  1,  5, 10, 15,  18 },
+		[DPTC_PPT_PL2_SPPT] = {  1,  5, 10, 15,  18 },
+		[DPTC_PPT_PL3_FPPT] = {  1,  5, 12, 18,  22 },
+		[DPTC_CPU_TEMP]     = { 60, 70, 85, 90, 100 },
+	},
+	.profiles = {
+		[PLATFORM_PROFILE_LOW_POWER]   = { .vals = {  5,  5,  8, 0 } },
+		[PLATFORM_PROFILE_BALANCED]    = { .vals = { 10, 12, 15, 0 } },
+		[PLATFORM_PROFILE_PERFORMANCE] = { .vals = { 15, 15, 18, 0 } },
+	},
+};
+
+/* 18W class: AYANEO AIR Plus/Pro (Ryzen 5 5560U, Ryzen 7 5825U) */
+static const struct dptc_device_limits limits_18w = {
+	.params = {
+		[DPTC_PPT_PL1_SPL]  = {  1,  5, 15, 18,  22 },
+		[DPTC_PPT_PL2_SPPT] = {  1,  5, 15, 18,  22 },
+		[DPTC_PPT_PL3_FPPT] = {  1,  5, 15, 20,  25 },
+		[DPTC_CPU_TEMP]     = { 60, 70, 85, 90, 100 },
+	},
+	.profiles = {
+		[PLATFORM_PROFILE_LOW_POWER]   = { .vals = {  5,  5,  8, 0 } },
+		[PLATFORM_PROFILE_BALANCED]    = { .vals = { 12, 14, 15, 0 } },
+		[PLATFORM_PROFILE_PERFORMANCE] = { .vals = { 18, 18, 20, 0 } },
+	},
+};
+
+/* 25W class: Ryzen 5000 handhelds (AYANEO NEXT, KUN) */
+static const struct dptc_device_limits limits_25w = {
+	.params = {
+		[DPTC_PPT_PL1_SPL]  = {  1,  4, 15, 25,  32 },
+		[DPTC_PPT_PL2_SPPT] = {  1,  4, 20, 27,  35 },
+		[DPTC_PPT_PL3_FPPT] = {  1,  4, 25, 30,  37 },
+		[DPTC_CPU_TEMP]     = { 60, 70, 85, 90, 100 },
+	},
+	.profiles = {
+		[PLATFORM_PROFILE_LOW_POWER]   = { .vals = {  8,  8, 12, 0 } },
+		[PLATFORM_PROFILE_BALANCED]    = { .vals = { 15, 17, 20, 0 } },
+		[PLATFORM_PROFILE_PERFORMANCE] = { .vals = { 25, 27, 30, 0 } },
+	},
+};
+
+/* 28W class: GPD Win series, AYANEO 2, OrangePi NEO-01 */
+static const struct dptc_device_limits limits_28w = {
+	.params = {
+		[DPTC_PPT_PL1_SPL]  = {  1,  4, 15, 28,  32 },
+		[DPTC_PPT_PL2_SPPT] = {  1,  4, 20, 30,  35 },
+		[DPTC_PPT_PL3_FPPT] = {  1,  4, 25, 32,  37 },
+		[DPTC_CPU_TEMP]     = { 60, 70, 85, 90, 100 },
+	},
+	.profiles = {
+		[PLATFORM_PROFILE_LOW_POWER]   = { .vals = {  8,  8, 12, 0 } },
+		[PLATFORM_PROFILE_BALANCED]    = { .vals = { 15, 17, 22, 0 } },
+		[PLATFORM_PROFILE_PERFORMANCE] = { .vals = { 25, 28, 32, 0 } },
+	},
+};
+
+/* 30W class: OneXPlayer, AYANEO FLIP/GEEK/SLIDE, AOKZOE */
+static const struct dptc_device_limits limits_30w = {
+	.params = {
+		[DPTC_PPT_PL1_SPL]  = {  1,  4, 15, 30,  40 },
+		[DPTC_PPT_PL2_SPPT] = {  1,  4, 20, 32,  43 },
+		[DPTC_PPT_PL3_FPPT] = {  1,  4, 25, 41,  50 },
+		[DPTC_CPU_TEMP]     = { 60, 70, 85, 90, 100 },
+	},
+	.profiles = {
+		[PLATFORM_PROFILE_LOW_POWER]   = { .vals = {  8,  8, 12, 0 } },
+		[PLATFORM_PROFILE_BALANCED]    = { .vals = { 15, 17, 25, 0 } },
+		[PLATFORM_PROFILE_PERFORMANCE] = { .vals = { 25, 28, 41, 0 } },
+	},
+};
+
+/* 35W class: AYANEO 3 */
+static const struct dptc_device_limits limits_35w = {
+	.params = {
+		[DPTC_PPT_PL1_SPL]  = {  1,  4, 15, 35,  40 },
+		[DPTC_PPT_PL2_SPPT] = {  1,  4, 20, 37,  43 },
+		[DPTC_PPT_PL3_FPPT] = {  1,  4, 25, 41,  50 },
+		[DPTC_CPU_TEMP]     = { 60, 70, 85, 90, 100 },
+	},
+	.profiles = {
+		[PLATFORM_PROFILE_LOW_POWER]   = { .vals = {  8,  8, 12, 0 } },
+		[PLATFORM_PROFILE_BALANCED]    = { .vals = { 15, 17, 25, 0 } },
+		[PLATFORM_PROFILE_PERFORMANCE] = { .vals = { 25, 28, 41, 0 } },
+	},
+};
+
+/* 54W class: Ayaneo Kun (max TDP supported by the platform) */
+static const struct dptc_device_limits limits_54w = {
+	.params = {
+		[DPTC_PPT_PL1_SPL]  = {  1,  4, 15, 54,  54 },
+		[DPTC_PPT_PL2_SPPT] = {  1,  4, 20, 54,  54 },
+		[DPTC_PPT_PL3_FPPT] = {  1,  4, 25, 54,  54 },
+		[DPTC_CPU_TEMP]     = { 60, 70, 85, 90, 100 },
+	},
+	.profiles = {
+		[PLATFORM_PROFILE_LOW_POWER]   = { .vals = {  8,  8, 12, 0 } },
+		[PLATFORM_PROFILE_BALANCED]    = { .vals = { 15, 17, 25, 0 } },
+		[PLATFORM_PROFILE_PERFORMANCE] = { .vals = { 25, 28, 41, 0 } },
+	},
+};
+
 /* AI MAX Handheld class: GPD Win 5 */
 static const struct dptc_device_limits limits_maxhh = {
 	.params = {
@@ -97,7 +202,7 @@ static const struct dptc_device_limits limits_maxhh = {
 	.profiles = {
 		[PLATFORM_PROFILE_LOW_POWER]   = { .vals = { 15, 15, 25, 0 } },
 		[PLATFORM_PROFILE_BALANCED]    = { .vals = { 25, 27, 40, 0 } },
-		[PLATFORM_PROFILE_PERFORMANCE] = { .vals = { 60, 63, 85, 0 } },
+		[PLATFORM_PROFILE_PERFORMANCE] = { .vals = { 45, 50, 60, 0 } },
 	},
 };
 
@@ -105,18 +210,413 @@ static const struct dptc_device_limits limits_maxhh = {
 static const char * const dptc_soc_table[] = {
 	/* AI MAX */
 	"AMD RYZEN AI MAX+ 395",
+	"AMD RYZEN AI MAX+ 388",
 	"AMD RYZEN AI MAX+ 385",
+	"AMD RYZEN AI MAX 385",
 	"AMD RYZEN AI MAX 380",
+	/* Ryzen AI */
+	"AMD Ryzen AI 9 HX 470",
+	"AMD Ryzen AI 9 HX 370",
+	/* Ryzen 8000 */
+	"AMD Ryzen 7 8840U",
+	/* Ryzen 7040 */
+	"AMD Ryzen 7 7840U",
+	"AMD Ryzen 5 7640U",
+	/* Ryzen 6000 */
+	"AMD Ryzen 7 6800U",
+	"AMD Ryzen 7 6600U",
+	/* Ryzen 5000 */
+	"AMD Ryzen 7 5800U",
+	"AMD Ryzen 7 5700U",
+	"AMD Ryzen 5 5560U",
 	NULL,
 };
 
 static const struct dmi_system_id dptc_dmi_table[] = {
+	/* Minisforum */
+	{
+		.ident = "Minisforum V3",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_BOARD_VENDOR,
+					"Shenzhen Meigao Electronic Equipment Co.,Ltd"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "HPPAC"),
+		},
+		.driver_data = (void *)&limits_28w,
+	},
 	/* GPD */
+	{
+		.ident = "GPD Win Mini",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "GPD"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "G1617-01"),
+		},
+		.driver_data = (void *)&limits_28w,
+	},
+	{
+		.ident = "GPD Win Mini 2024",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "GPD"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "G1617-02"),
+		},
+		.driver_data = (void *)&limits_28w,
+	},
+	{
+		.ident = "GPD Win Mini 2024",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "GPD"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "G1617-02-L"),
+		},
+		.driver_data = (void *)&limits_28w,
+	},
+	{
+		.ident = "GPD Win 4",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "GPD"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "G1618-04"),
+		},
+		.driver_data = (void *)&limits_28w,
+	},
 	{
 		.ident = "GPD Win 5",
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "GPD"),
 			DMI_MATCH(DMI_PRODUCT_NAME, "G1618-05"),
+		},
+		.driver_data = (void *)&limits_maxhh,
+	},
+	{
+		.ident = "GPD Win Max 2",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "GPD"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "G1619-04"),
+		},
+		.driver_data = (void *)&limits_28w,
+	},
+	{
+		.ident = "GPD Win Max 2 2024",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "GPD"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "G1619-05"),
+		},
+		.driver_data = (void *)&limits_28w,
+	},
+	{
+		.ident = "GPD Duo",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "GPD"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "G1622-01"),
+		},
+		.driver_data = (void *)&limits_28w,
+	},
+	{
+		.ident = "GPD Duo",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "GPD"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "G1622-01-L"),
+		},
+		.driver_data = (void *)&limits_28w,
+	},
+	{
+		.ident = "GPD Pocket 4",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "GPD"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "G1628-04"),
+		},
+		.driver_data = (void *)&limits_28w,
+	},
+	{
+		.ident = "GPD Pocket 4",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "GPD"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "G1628-04-L"),
+		},
+		.driver_data = (void *)&limits_28w,
+	},
+	/* OrangePi */
+	{
+		.ident = "OrangePi NEO-01",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "OrangePi"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "NEO-01"),
+		},
+		.driver_data = (void *)&limits_28w,
+	},
+	/* AYN */
+	{
+		.ident = "AYN Loki Max",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "ayn"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Loki Max"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	/* Tectoy (Zeenix Pro = Loki Max) */
+	{
+		.ident = "Zeenix Pro",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Tectoy"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Zeenix Pro"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	/* AOKZOE */
+	{
+		.ident = "AOKZOE A1 AR07",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AOKZOE"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AOKZOE A1 AR07"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	{
+		.ident = "AOKZOE A1 Pro",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AOKZOE"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AOKZOE A1 Pro"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	{
+		.ident = "AOKZOE A1X",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AOKZOE"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AOKZOE A1X"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	{
+		.ident = "AOKZOE A2 Pro",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AOKZOE"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AOKZOE A2 Pro"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	/* OneXPlayer (Intel variants filtered by SoC table) */
+	{
+		.ident = "ONEXPLAYER F1Pro",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER F1Pro"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	{
+		.ident = "ONEXPLAYER F1 EVA-02",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER F1 EVA-02"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	{
+		.ident = "ONEXPLAYER 2",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_MATCH(DMI_BOARD_NAME, "ONEXPLAYER 2"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	{
+		.ident = "ONEXPLAYER X1 A",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER X1 A"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	{
+		.ident = "ONEXPLAYER X1z",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER X1z"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	{
+		.ident = "ONEXPLAYER X1Pro",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER X1Pro"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	{
+		.ident = "ONEXPLAYER G1 A",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER G1 A"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	/* OneXPlayer AI MAX handhelds */
+	{
+		.ident = "ONEXPLAYER X2Mini PRO",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER X2Mini PRO"),
+		},
+		.driver_data = (void *)&limits_maxhh,
+	},
+	{
+		.ident = "ONEXPLAYER APEX",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER APEX"),
+		},
+		.driver_data = (void *)&limits_maxhh,
+	},
+	/* AYANEO - 15W */
+	{
+		.ident = "AYANEO AIR",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AIR"),
+		},
+		.driver_data = (void *)&limits_15w,
+	},
+	/* AYANEO - 18W */
+	{
+		.ident = "AYANEO AIR Plus",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AIR Plus"),
+		},
+		.driver_data = (void *)&limits_18w,
+	},
+	{
+		.ident = "AYANEO AIR Pro",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AIR Pro"),
+		},
+		.driver_data = (void *)&limits_18w,
+	},
+	/* AYANEO - 25W */
+	{
+		.ident = "AYANEO AIR 1S",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_MATCH(DMI_BOARD_NAME, "AIR 1S"),
+		},
+		.driver_data = (void *)&limits_25w,
+	},
+	{
+		.ident = "AYANEO NEXT Advance",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "NEXT Advance"),
+		},
+		.driver_data = (void *)&limits_25w,
+	},
+	{
+		.ident = "AYANEO NEXT Lite",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "NEXT Lite"),
+		},
+		.driver_data = (void *)&limits_25w,
+	},
+	{
+		.ident = "AYANEO NEXT Pro",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "NEXT Pro"),
+		},
+		.driver_data = (void *)&limits_25w,
+	},
+	{
+		.ident = "AYANEO NEXT",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "NEXT"),
+		},
+		.driver_data = (void *)&limits_25w,
+	},
+	/* AYANEO - 28W */
+	{
+		.ident = "AYANEO 2",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_MATCH(DMI_BOARD_NAME, "AYANEO 2"),
+		},
+		.driver_data = (void *)&limits_28w,
+	},
+	{
+		.ident = "SuiPlay0X1",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "Mysten Labs, Inc."),
+			DMI_MATCH(DMI_PRODUCT_NAME, "SuiPlay0X1"),
+		},
+		.driver_data = (void *)&limits_28w,
+	},
+	/* AYANEO - 30W */
+	{
+		/* DMI_MATCH catches all FLIP variants (DS, KB, 1S DS, 1S KB) */
+		.ident = "AYANEO FLIP",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_MATCH(DMI_BOARD_NAME, "FLIP"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	{
+		/* DMI_MATCH catches GEEK and GEEK 1S */
+		.ident = "AYANEO GEEK",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_MATCH(DMI_BOARD_NAME, "GEEK"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	{
+		.ident = "AYANEO SLIDE",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "SLIDE"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	{
+		.ident = "KONKR FIT",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "KONKR"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "KONKR FIT"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	/* AYANEO - 35W */
+	{
+		.ident = "AYANEO 3",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AYANEO 3"),
+		},
+		.driver_data = (void *)&limits_35w,
+	},
+	/* AYANEO 54W APU */
+	{
+		.ident = "AYANEO KUN",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "KUN"),
+		},
+		.driver_data = (void *)&limits_54w,
+	},
+	{
+		.ident = "AYANEO KUN",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AYANEO KUN"),
+		},
+		.driver_data = (void *)&limits_54w,
+	},
+	/* AYANEO AI MAX handhelds */
+	{
+		.ident = "AYANEO NEXT 2",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_BOARD_VENDOR, "AYA"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AB09"),
 		},
 		.driver_data = (void *)&limits_maxhh,
 	},
