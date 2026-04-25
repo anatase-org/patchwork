@@ -222,6 +222,9 @@ config DMA_SHARED_BUFFER
 	  APIs extension; the file's descriptor can then be passed on to other
 	  driver.
 
+config HINT
+	bool
+
 config GENERIC_ARCH_TOPOLOGY
 	bool
 	help
