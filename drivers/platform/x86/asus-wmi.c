@@ -336,6 +336,8 @@ struct asus_wmi {
 	struct asus_wmi_debug debug;
 
 	struct asus_wmi_driver *driver;
+
+	struct acpi_s2idle_dev_ops s2idle_dev_ops;
 };
 
 /* Global to allow setting externally without requiring driver data */
@@ -5020,6 +5022,12 @@ static int asus_wmi_add(struct platform_device *pdev)
 	if (err)
 		goto fail_platform;
 
+	if (asus->driver->quirks->lps0_begin_delay) {
+		asus->s2idle_dev_ops.begin_delay =
+			asus->driver->quirks->lps0_begin_delay;
+		acpi_register_lps0_dev(&asus->s2idle_dev_ops);
+	}
+
 	if (use_ally_mcu_hack == ASUS_WMI_ALLY_MCU_HACK_INIT) {
 		if (acpi_has_method(NULL, ASUS_USB0_PWR_EC0_CSEE)
 					&& dmi_check_system(asus_rog_ally_device))
@@ -5174,6 +5182,8 @@ fail_sysfs:
 fail_custom_fan_curve:
 fail_platform_profile_setup:
 fail_fan_boost_mode:
+	if (asus->driver->quirks->lps0_begin_delay)
+		acpi_unregister_lps0_dev(&asus->s2idle_dev_ops);
 fail_platform:
 	kfree(asus);
 	return err;
@@ -5197,6 +5207,8 @@ static void asus_wmi_remove(struct platform_device *device)
 	asus_fan_set_auto(asus);
 	throttle_thermal_policy_set_default(asus);
 	asus_wmi_battery_exit(asus);
+	if (asus->driver->quirks->lps0_begin_delay)
+		acpi_unregister_lps0_dev(&asus->s2idle_dev_ops);
 
 	kfree(asus);
 }
