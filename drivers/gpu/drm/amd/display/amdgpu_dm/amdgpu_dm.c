@@ -9646,19 +9646,33 @@ static void update_freesync_state_on_stream(
 
 	aconn = (struct amdgpu_dm_connector *)new_stream->dm_stream_context;
 
-	if (aconn && (aconn->as_type == FREESYNC_TYPE_PCON_IN_WHITELIST || aconn->vsdb_info.replay_mode)) {
+	if (aconn && (aconn->as_type == FREESYNC_TYPE_PCON_IN_WHITELIST ||
+		      aconn->vsdb_info.replay_mode)) {
+		struct drm_connector *connector = &aconn->base;
 		pack_sdp_v1_3 = aconn->pack_sdp_v1_3;
 
-		if (aconn->vsdb_info.amd_vsdb_version == 1)
-			packet_type = PACKET_TYPE_FS_V1;
-		else if (aconn->vsdb_info.amd_vsdb_version == 2)
-			packet_type = PACKET_TYPE_FS_V2;
-		else if (aconn->vsdb_info.amd_vsdb_version == 3)
-			packet_type = PACKET_TYPE_FS_V3;
+		DRM_DEBUG_KMS("PCON Type, VRR supported: = %d",
+			      connector->display_info.hdmi.vrr_cap.supported);
+
+		/* if not HDMI VRR capable, use FreeSync SPD packet */
+		if (!connector->display_info.hdmi.vrr_cap.supported) {
+			if (aconn->vsdb_info.amd_vsdb_version == 1)
+				packet_type = PACKET_TYPE_FS_V1;
+			else if (aconn->vsdb_info.amd_vsdb_version == 2)
+				packet_type = PACKET_TYPE_FS_V2;
+			else if (aconn->vsdb_info.amd_vsdb_version == 3)
+				packet_type = PACKET_TYPE_FS_V3;
+		} else {
+			/* HDMI VRR but not FreeSync capable, use VTEM packet */
+			packet_type = PACKET_TYPE_VTEM;
+		}
 
 		mod_build_adaptive_sync_infopacket(new_stream, aconn->as_type, NULL,
 					&new_stream->adaptive_sync_infopacket);
 	}
+
+	DRM_DEBUG_KMS("as_type = %d, packet_type = %d",
+		      aconn ? aconn->as_type : ADAPTIVE_SYNC_TYPE_NONE, packet_type);
 
 	mod_freesync_build_vrr_infopacket(
 		dm->freesync_module,
