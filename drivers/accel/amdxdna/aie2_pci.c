@@ -499,6 +499,7 @@ static int aie2_init(struct amdxdna_dev *xdna)
 	void __iomem *tbl[PCI_NUM_RESOURCES] = {0};
 	struct init_config xrs_cfg = { 0 };
 	struct amdxdna_dev_hdl *ndev;
+	struct iommu_group *group;
 	struct psp_config psp_conf;
 	const struct firmware *fw;
 	unsigned long bars = 0;
@@ -509,6 +510,13 @@ static int aie2_init(struct amdxdna_dev *xdna)
 		XDNA_ERR(xdna, "Running under hypervisor not supported");
 		return -EINVAL;
 	}
+
+	group = iommu_group_get(xdna->ddev.dev);
+	if (!group) {
+		XDNA_ERR(xdna, "Running without IOMMU not supported");
+		return -EINVAL;
+	}
+	iommu_group_put(group);
 
 	ndev = drmm_kzalloc(&xdna->ddev, sizeof(*ndev), GFP_KERNEL);
 	if (!ndev)
