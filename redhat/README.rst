@@ -1,25 +1,28 @@
-===================
-The Kernel dist-git
-===================
+Anatase Kernel
+==============
 
-The kernel is maintained in a `source tree`_ rather than directly in dist-git.
-The specfile is maintained as a `template`_ in the source tree along with a set
-of build scripts to generate configurations, (S)RPMs, and to populate the
-dist-git repository.
+This repository contains the Anatase kernel, derived
+from the Fedora Always Ready Kernel
+(`kernel-ark <https://gitlab.com/cki-project/kernel-ark>`__) repository.
 
-The `documentation`_ for the source tree covers how to contribute and maintain
-the tree.
+This kernel contains optimizations and drivers for handhelds and gaming
+hardware. Those patches are applied directly on top of the Fedora patchset
+`here <./patch-anatase.patch>`__, after being rebased on top of the ARK
+kernel tree in the patchwork
+`repo <https://github.com/anatase-org/patchwork>`__.
 
-If you're looking for the downstream patch set it's available in the source
-tree with "git log master..ark-patches" or
-`online`_.
+To make it Github friendly, this repository contains actions and
+containers to build the kernel and generate the RPMs in Github. As a
+bonus point, each release includes a repackaged version of the kernel
+for Arch.
 
-Each release in dist-git is tagged in the source repository so you can easily
-check out the source tree for a build. The tags are in the format
-name-version-release, but note release doesn't contain the dist tag since the
-source can be built in different build roots (Fedora, CentOS, etc.)
+Contributing
+------------
 
-.. _source tree: https://gitlab.com/cki-project/kernel-ark.git
-.. _template: https://gitlab.com/cki-project/kernel-ark/-/blob/os-build/redhat/kernel.spec.template
-.. _documentation: https://gitlab.com/cki-project/kernel-ark/-/wikis/home
-.. _online: https://gitlab.com/cki-project/kernel-ark/-/commits/ark-patches
+If you find that a patch is missing, or you have a patch that you think
+should be included, please open an issue with a link to the patch or
+the lore.
+
+DO NOT OPEN A PULL REQUEST. The patch files are generated
+automatically from the patchwork repository, and any changes to it
+will be overwritten.
