@@ -205,6 +205,11 @@ sphinx_*/
 # Rust analyzer configuration
 /rust-project.json
 
+# Dev stuff
+cert.der
+key.*
+out
+
 # rustc error message long types
 *.long-type-*.txt
 
