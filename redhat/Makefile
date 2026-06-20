@@ -204,7 +204,10 @@ ifndef VERSION_ON_UPSTREAM
   endif
 endif
 
-UPSTREAM:=$(shell $(GIT) rev-parse -q --verify origin/$(UPSTREAM_BRANCH) || \
+UPSTREAM:=$(shell \
+			$(GIT) rev-parse -q --verify origin/$(UPSTREAM_BRANCH) || \
+			$(GIT) rev-parse -q --verify ark/$(UPSTREAM_BRANCH) || \
+			$(GIT) rev-parse -q --verify stable/$(UPSTREAM_BRANCH) || \
             $(GIT) rev-parse -q --verify $(UPSTREAM_BRANCH))
 
 ifneq ("$(wildcard $(TOPDIR)/localversion-next)", "")
