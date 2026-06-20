@@ -200,3 +200,8 @@ sphinx_*/
 
 # Rust analyzer configuration
 /rust-project.json
+
+# Dev stuff
+cert.der
+key.*
+out
