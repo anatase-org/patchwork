@@ -77,12 +77,17 @@
 #define MSI_PLATFORM_SHIFT_GREEN	(MSI_PLATFORM_SHIFT_ENABLE + 1)
 #define MSI_PLATFORM_SHIFT_ECO		(MSI_PLATFORM_SHIFT_ENABLE + 2)
 #define MSI_PLATFORM_SHIFT_USER		(MSI_PLATFORM_SHIFT_ENABLE + 3)
+#define MSI_PLATFORM_SHIFT_MANUAL	(MSI_PLATFORM_SHIFT_ENABLE + 6)
 
 /* Get_Data() and Set_Data() Params */
-#define MSI_PLATFORM_PPT_PL1_SPL_ADDR	0x50
-#define MSI_PLATFORM_PPT_PL2_SPPT_ADDR	0x51
-#define MSI_PLATFORM_PPT_PL3_FPPT_ADDR	0x52
+#define MSI_PLATFORM_PL1_ADDR		0x50
+#define MSI_PLATFORM_PL2_ADDR		0x51
+#define MSI_PLATFORM_PL3_ADDR		0x52
+#define MSI_PLATFORM_AMDSTAPM_ADDR	0xc5
 #define MSI_PLATFORM_BAT_ADDR	0xd7
+
+#define MSI_PLATFORM_AMDSTAPM_SUPPORTED		BIT(7)
+#define MSI_PLATFORM_AMDSTAPM_DISABLE		BIT(0)
 
 static bool force;
 module_param_unsafe(force, bool, 0);
@@ -125,11 +130,14 @@ struct msi_wmi_platform_quirk {
 	bool charge_threshold;	/* Charge threshold is supported */
 	bool dual_fans;		/* For devices with two hwmon fans */
 	bool restore_curves;	/* Restore factory curves on unload */
+	bool disable_stapm;	/* Disable AMD STAPM auto power management on load */
+	u8 custom_shift;	/* EC Shift value for PLATFORM_PROFILE_CUSTOM, 0 if unsupported */
 	int pl1_min;		/* Minimum PL1 value */
 	int pl1_max;		/* Maximum PL1 value */
 	int pl2_min;		/* Minimum PL2 value */
 	int pl2_max;		/* Maximum PL2 value */
-	int ppt_pl3_fppt;		/* Maximum FPPT value */
+	int pl3_min;		/* Minimum PL3 value */
+	int pl3_max;		/* Maximum PL3 value */
 };
 
 struct msi_wmi_platform_factory_curves {
@@ -165,7 +173,7 @@ static const char *const msi_fw_attr_name[] = {
 static const char *const msi_fw_attr_desc[] = {
 	[MSI_ATTR_PPT_PL1_SPL] = "CPU Steady package limit (PL1/SPL)",
 	[MSI_ATTR_PPT_PL2_SPPT] = "CPU Boost slow package limit (PL2/SPPT)",
-	[MSI_ATTR_PPT_PL3_FPPT] = "CPU Boost fast package limit (FPPT)",
+	[MSI_ATTR_PPT_PL3_FPPT] = "CPU Boost fast package limit (PL3/FPPT)",
 };
 
 #define MSI_ATTR_LANGUAGE_CODE "en_US.UTF-8"
@@ -250,16 +258,18 @@ static struct msi_wmi_platform_quirk quirk_gen2 = {
 	.pl2_min = 9,
 	.pl2_max = 37,
 };
-static struct msi_wmi_platform_quirk quirk_amd = {
+static struct msi_wmi_platform_quirk quirk_gen3 = {
 	.shift_mode = true,
 	.charge_threshold = true,
 	.dual_fans = true,
 	.restore_curves = true,
-	.pl1_min = 4,
-	.pl1_max = 37,
-	.pl2_min = 4,
-	.pl2_max = 45,
-	.ppt_pl3_fppt = 55
+	.disable_stapm = true,
+	.pl1_min = 7,
+	.pl1_max = 35,
+	.pl2_min = 9,
+	.pl2_max = 40,
+	.pl3_min = 10,
+	.pl3_max = 48,
 };
 
 static const struct dmi_system_id msi_quirks[] = {
@@ -288,12 +298,12 @@ static const struct dmi_system_id msi_quirks[] = {
 		.driver_data = &quirk_gen2,
 	},
 	{
-		.ident = "MSI Claw A8",
+		.ident = "MSI Claw A8 BZ2EM",
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "Micro-Star International Co., Ltd."),
 			DMI_MATCH(DMI_BOARD_NAME, "MS-1T8K"),
 		},
-		.driver_data = &quirk_amd,
+		.driver_data = &quirk_gen3,
 	},
 	{ }
 };
@@ -883,11 +893,11 @@ static int data_get_addr(struct msi_wmi_platform_data *data,
 {
 	switch (id) {
 	case MSI_ATTR_PPT_PL1_SPL:
-		return MSI_PLATFORM_PPT_PL1_SPL_ADDR;
+		return MSI_PLATFORM_PL1_ADDR;
 	case MSI_ATTR_PPT_PL2_SPPT:
-		return MSI_PLATFORM_PPT_PL2_SPPT_ADDR;
+		return MSI_PLATFORM_PL2_ADDR;
 	case MSI_ATTR_PPT_PL3_FPPT:
-		return MSI_PLATFORM_PPT_PL3_FPPT_ADDR;
+		return MSI_PLATFORM_PL3_ADDR;
 	default:
 		pr_warn("Invalid attribute id %d\n", id);
 		return -EINVAL;
@@ -1176,10 +1186,10 @@ static int msi_wmi_fw_attrs_init(struct msi_wmi_platform_data *data)
 			return err;
 	}
 
-	if (data->quirks->ppt_pl3_fppt) {
+	if (data->quirks->pl3_max) {
 		err = msi_fw_attr_init(data, MSI_ATTR_PPT_PL3_FPPT,
-				       &fw_attr_type_int, data->quirks->pl1_min,
-				       data->quirks->ppt_pl3_fppt,
+				       &fw_attr_type_int, data->quirks->pl3_min,
+				       data->quirks->pl3_max,
 				       &data_get_value, &data_set_value);
 		if (err)
 			return err;
@@ -1456,6 +1466,31 @@ static int msi_wmi_platform_init(struct msi_wmi_platform_data *data)
 	return 0;
 }
 
+static int msi_wmi_platform_disable_stapm(struct msi_wmi_platform_data *data)
+{
+	u8 buffer[32] = { 0 };
+	int ret;
+
+	buffer[0] = MSI_PLATFORM_AMDSTAPM_ADDR;
+
+	ret = msi_wmi_platform_query(data, MSI_PLATFORM_GET_DATA, buffer, sizeof(buffer));
+	if (ret < 0)
+		return ret;
+
+	/* Only touch it if firmware self-reports STAPM support */
+	if (!(buffer[1] & MSI_PLATFORM_AMDSTAPM_SUPPORTED))
+		return 0;
+
+	buffer[0] = MSI_PLATFORM_AMDSTAPM_ADDR;
+	buffer[1] |= MSI_PLATFORM_AMDSTAPM_DISABLE;
+
+	ret = msi_wmi_platform_query(data, MSI_PLATFORM_SET_DATA, buffer, sizeof(buffer));
+	if (ret < 0)
+		return ret;
+
+	return 0;
+}
+
 static int msi_wmi_platform_profile_setup(struct msi_wmi_platform_data *data)
 {
 	if (!data->quirks->shift_mode)
@@ -1494,6 +1529,12 @@ static int msi_wmi_platform_probe(struct wmi_device *wdev, const void *context)
 	ret = msi_wmi_platform_init(data);
 	if (ret < 0)
 		return ret;
+
+	if (data->quirks->disable_stapm) {
+		ret = msi_wmi_platform_disable_stapm(data);
+		if (ret < 0)
+			return ret;
+	}
 
 	ret = msi_wmi_platform_ec_init(data);
 	if (ret < 0)
