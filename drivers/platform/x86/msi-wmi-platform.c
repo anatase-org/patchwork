@@ -125,9 +125,10 @@ struct msi_wmi_platform_quirk {
 	bool charge_threshold;	/* Charge threshold is supported */
 	bool dual_fans;		/* For devices with two hwmon fans */
 	bool restore_curves;	/* Restore factory curves on unload */
-	int ppt_min;		/* Minimum PLx value */
-	int ppt_pl1_spl_max;	/* Maximum PL1/SPL value */
-	int ppt_pl2_sppt_max;	/* Maximum PL2/SPPT value */
+	int pl1_min;		/* Minimum PL1 value */
+	int pl1_max;		/* Maximum PL1 value */
+	int pl2_min;		/* Minimum PL2 value */
+	int pl2_max;		/* Maximum PL2 value */
 	int ppt_pl3_fppt;		/* Maximum FPPT value */
 };
 
@@ -234,33 +235,36 @@ static struct msi_wmi_platform_quirk quirk_gen1 = {
 	.charge_threshold = true,
 	.dual_fans = true,
 	.restore_curves = true,
-	.ppt_min = 8,
-	.ppt_pl1_spl_max = 43,
-	.ppt_pl2_sppt_max = 45
+	.pl1_min = 8,
+	.pl1_max = 43,
+	.pl2_min = 9,
+	.pl2_max = 45
 };
 static struct msi_wmi_platform_quirk quirk_gen2 = {
 	.shift_mode = true,
 	.charge_threshold = true,
 	.dual_fans = true,
 	.restore_curves = true,
-	.ppt_min = 8,
-	.ppt_pl1_spl_max = 30,
-	.ppt_pl2_sppt_max = 37,
+	.pl1_min = 8,
+	.pl1_max = 30,
+	.pl2_min = 9,
+	.pl2_max = 37,
 };
 static struct msi_wmi_platform_quirk quirk_amd = {
 	.shift_mode = true,
 	.charge_threshold = true,
 	.dual_fans = true,
 	.restore_curves = true,
-	.ppt_min = 4,
-	.ppt_pl1_spl_max = 37,
-	.ppt_pl2_sppt_max = 45,
+	.pl1_min = 4,
+	.pl1_max = 37,
+	.pl2_min = 4,
+	.pl2_max = 45,
 	.ppt_pl3_fppt = 55
 };
 
 static const struct dmi_system_id msi_quirks[] = {
 	{
-		.ident = "MSI Claw (gen 1)",
+		.ident = "MSI Claw A1M",
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "Micro-Star International Co., Ltd."),
 			DMI_MATCH(DMI_BOARD_NAME, "MS-1T41"),
@@ -268,7 +272,7 @@ static const struct dmi_system_id msi_quirks[] = {
 		.driver_data = &quirk_gen1,
 	},
 	{
-		.ident = "MSI Claw AI+ 7",
+		.ident = "MSI Claw 7 AI+ A2VM",
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "Micro-Star International Co., Ltd."),
 			DMI_MATCH(DMI_BOARD_NAME, "MS-1T42"),
@@ -276,7 +280,7 @@ static const struct dmi_system_id msi_quirks[] = {
 		.driver_data = &quirk_gen2,
 	},
 	{
-		.ident = "MSI Claw AI+ 8",
+		.ident = "MSI Claw 8 AI+ A2VM",
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "Micro-Star International Co., Ltd."),
 			DMI_MATCH(DMI_BOARD_NAME, "MS-1T52"),
@@ -1154,19 +1158,19 @@ static int msi_wmi_fw_attrs_init(struct msi_wmi_platform_data *data)
 	if (err)
 		return err;
 
-	if (data->quirks->ppt_pl1_spl_max) {
+	if (data->quirks->pl1_max) {
 		err = msi_fw_attr_init(data, MSI_ATTR_PPT_PL1_SPL,
-					&fw_attr_type_int, data->quirks->ppt_min,
-					data->quirks->ppt_pl1_spl_max,
+					&fw_attr_type_int, data->quirks->pl1_min,
+					data->quirks->pl1_max,
 					&data_get_value, &data_set_value);
 		if (err)
 			return err;
 	}
 
-	if (data->quirks->ppt_pl2_sppt_max) {
+	if (data->quirks->pl2_max) {
 		err = msi_fw_attr_init(data, MSI_ATTR_PPT_PL2_SPPT,
-				       &fw_attr_type_int, data->quirks->ppt_min,
-				       data->quirks->ppt_pl2_sppt_max,
+				       &fw_attr_type_int, data->quirks->pl2_min,
+				       data->quirks->pl2_max,
 				       &data_get_value, &data_set_value);
 		if (err)
 			return err;
@@ -1174,7 +1178,7 @@ static int msi_wmi_fw_attrs_init(struct msi_wmi_platform_data *data)
 
 	if (data->quirks->ppt_pl3_fppt) {
 		err = msi_fw_attr_init(data, MSI_ATTR_PPT_PL3_FPPT,
-				       &fw_attr_type_int, data->quirks->ppt_min,
+				       &fw_attr_type_int, data->quirks->pl1_min,
 				       data->quirks->ppt_pl3_fppt,
 				       &data_get_value, &data_set_value);
 		if (err)
@@ -1293,16 +1297,13 @@ static ssize_t msi_wmi_platform_debugfs_write(struct file *fp, const char __user
 		return ret;
 
 	down_write(&data->buffer_lock);
+	memcpy(data->buffer, payload, data->length);
 	ret = msi_wmi_platform_query(data->data, data->method, data->buffer,
 				     data->length);
 	up_write(&data->buffer_lock);
 
 	if (ret < 0)
 		return ret;
-
-	down_write(&data->buffer_lock);
-	memcpy(data->buffer, payload, data->length);
-	up_write(&data->buffer_lock);
 
 	return length;
 }
