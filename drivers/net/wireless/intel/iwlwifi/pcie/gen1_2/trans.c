@@ -3853,6 +3853,10 @@ iwl_trans_pcie_alloc(struct pci_dev *pdev,
 
 	trans_pcie->debug_rfkill = -1;
 
+	/* Some devices lose the PCIe link with ASPM L1.2 enabled. */
+	if (mac_cfg->disable_pcie_l1_2)
+		pci_disable_link_state(pdev, PCIE_LINK_STATE_L1_2);
+
 	if (!mac_cfg->base->pcie_l1_allowed) {
 		/*
 		 * W/A - seems to solve weird behavior. We need to remove this
