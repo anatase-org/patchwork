@@ -354,6 +354,7 @@ enum iwl_mac_cfg_ltr_delay {
  * @integrated: discrete or integrated
  * @low_latency_xtal: use the low latency xtal if supported
  * @bisr_workaround: BISR hardware workaround (for 22260 series devices)
+ * @disable_pcie_l1_2: disable PCIe ASPM L1.2
  * @ltr_delay: LTR delay parameter, &enum iwl_mac_cfg_ltr_delay.
  * @imr_enabled: use the IMR if supported.
  */
@@ -368,6 +369,7 @@ struct iwl_mac_cfg {
 	    integrated:1,
 	    low_latency_xtal:1,
 	    bisr_workaround:1,
+	    disable_pcie_l1_2:1,
 	    ltr_delay:2,
 	    imr_enabled:1;
 };

@@ -71,6 +71,7 @@ const struct iwl_mac_cfg iwl_ty_mac_cfg = {
 	.gen2 = true,
 	.device_family = IWL_DEVICE_FAMILY_AX210,
 	.base = &iwl_ax210_base,
+	.disable_pcie_l1_2 = true,
 	.umac_prph_offset = 0x300000,
 	/* TODO: the following values need to be checked */
 	.xtal_latency = 500,
