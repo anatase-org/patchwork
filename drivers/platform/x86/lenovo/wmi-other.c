@@ -42,8 +42,11 @@
 #include <linux/module.h>
 #include <linux/notifier.h>
 #include <linux/platform_profile.h>
+#include <linux/power_supply.h>
 #include <linux/types.h>
 #include <linux/wmi.h>
+
+#include <acpi/battery.h>
 
 #include "wmi-capdata.h"
 #include "wmi-events.h"
@@ -59,8 +62,12 @@
 #define LWMI_FEATURE_ID_CPU_SPL 0x02
 #define LWMI_FEATURE_ID_CPU_FPPT 0x03
 
+#define LWMI_FEATURE_ID_PSU_CHARGE_TYPES 0x01
+
 #define LWMI_FEATURE_ID_FAN_FULL_SPEED 0x02
 #define LWMI_FEATURE_ID_FAN_RPM 0x03
+
+#define LWMI_TYPE_ID_PSU_AC 0x01
 
 #define LWMI_FEATURE_VALUE_GET 17
 #define LWMI_FEATURE_VALUE_SET 18
@@ -70,6 +77,13 @@
 #define LWMI_FAN_ID(x) ((x) + LWMI_FAN_ID_BASE)
 
 #define LWMI_FAN_DIV 100
+
+#define LWMI_CHARGE_TYPE_STANDARD 0x00
+#define LWMI_CHARGE_TYPE_LONGLIFE 0x01
+
+#define LWMI_ATTR_ID_PSU_CHARGE_TYPES                                      \
+	lwmi_attr_id(LWMI_DEVICE_ID_PSU, LWMI_FEATURE_ID_PSU_CHARGE_TYPES, \
+		     LWMI_GZ_THERMAL_MODE_NONE, LWMI_TYPE_ID_PSU_AC)
 
 #define LWMI_ATTR_ID_FAN_RPM(x)                                   \
 	lwmi_attr_id(LWMI_DEVICE_ID_FAN, LWMI_FEATURE_ID_FAN_RPM, \
@@ -112,10 +126,12 @@ struct lwmi_om_priv {
 	struct kset *fw_attr_kset;
 	struct notifier_block nb;
 	struct wmi_device *wdev;
+	struct acpi_battery_hook battery_hook;
 	int ida_id;
 
 	struct lwmi_fan_info fan_info[LWMI_FAN_NR];
 	bool full_fan_speed_created;
+	bool battery_hook_registered;
 
 	struct {
 		bool capdata00_collected : 1;
@@ -543,6 +559,176 @@ static void lwmi_om_fan_info_collect_cd_fan(struct device *dev, struct cd_list *
 out:
 	priv->fan_flags.capdata_fan_collected = true;
 	lwmi_om_hwmon_add(priv);
+}
+
+/* ======== Power supply extension (component: lenovo-wmi-capdata 00) ======== */
+
+static int lwmi_om_psy_get_property(struct power_supply *psy,
+				    const struct power_supply_ext *ext,
+				    void *ext_data,
+				    enum power_supply_property prop,
+				    union power_supply_propval *val)
+{
+	struct lwmi_om_priv *priv = ext_data;
+	struct wmi_method_args_32 args = {
+		.arg0 = LWMI_ATTR_ID_PSU_CHARGE_TYPES,
+	};
+	u32 retval;
+	int ret;
+
+	if (prop != POWER_SUPPLY_PROP_CHARGE_TYPES)
+		return -EINVAL;
+
+	ret = lwmi_dev_evaluate_int(priv->wdev, 0x0, LWMI_FEATURE_VALUE_GET,
+				    (u8 *)&args, sizeof(args), &retval);
+	if (ret)
+		return ret;
+
+	switch (retval) {
+	case LWMI_CHARGE_TYPE_STANDARD:
+		val->intval = POWER_SUPPLY_CHARGE_TYPE_STANDARD;
+		break;
+	case LWMI_CHARGE_TYPE_LONGLIFE:
+		val->intval = POWER_SUPPLY_CHARGE_TYPE_LONGLIFE;
+		break;
+	default:
+		dev_err(&priv->wdev->dev, "invalid charge type value: %#x\n", retval);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int lwmi_om_psy_set_property(struct power_supply *psy,
+				    const struct power_supply_ext *ext,
+				    void *ext_data,
+				    enum power_supply_property prop,
+				    const union power_supply_propval *val)
+{
+	struct lwmi_om_priv *priv = ext_data;
+	struct wmi_method_args_32 args = {
+		.arg0 = LWMI_ATTR_ID_PSU_CHARGE_TYPES,
+	};
+
+	if (prop != POWER_SUPPLY_PROP_CHARGE_TYPES)
+		return -EINVAL;
+
+	switch (val->intval) {
+	case POWER_SUPPLY_CHARGE_TYPE_STANDARD:
+		args.arg1 = LWMI_CHARGE_TYPE_STANDARD;
+		break;
+	case POWER_SUPPLY_CHARGE_TYPE_LONGLIFE:
+		args.arg1 = LWMI_CHARGE_TYPE_LONGLIFE;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return lwmi_dev_evaluate_int(priv->wdev, 0x0, LWMI_FEATURE_VALUE_SET,
+				     (u8 *)&args, sizeof(args), NULL);
+}
+
+static int lwmi_om_psy_property_is_writeable(struct power_supply *psy,
+					     const struct power_supply_ext *ext,
+					     void *ext_data,
+					     enum power_supply_property prop)
+{
+	struct lwmi_om_priv *priv = ext_data;
+	struct capdata00 capdata;
+	int ret;
+
+	if (prop != POWER_SUPPLY_PROP_CHARGE_TYPES)
+		return false;
+
+	ret = lwmi_cd00_get_data(priv->cd00_list, LWMI_ATTR_ID_PSU_CHARGE_TYPES,
+				 &capdata);
+	if (ret)
+		return false;
+
+	return !!(capdata.supported & LWMI_SUPP_SET);
+}
+
+static const enum power_supply_property lwmi_om_psy_properties[] = {
+	POWER_SUPPLY_PROP_CHARGE_TYPES,
+};
+
+static const struct power_supply_ext lwmi_om_psy_extension = {
+	.name = LWMI_OM_FW_ATTR_BASE_PATH,
+	.properties = lwmi_om_psy_properties,
+	.num_properties = ARRAY_SIZE(lwmi_om_psy_properties),
+	.charge_types = BIT(POWER_SUPPLY_CHARGE_TYPE_STANDARD) |
+			BIT(POWER_SUPPLY_CHARGE_TYPE_LONGLIFE),
+	.get_property = lwmi_om_psy_get_property,
+	.set_property = lwmi_om_psy_set_property,
+	.property_is_writeable = lwmi_om_psy_property_is_writeable,
+};
+
+static int lwmi_om_battery_add(struct power_supply *battery,
+			       struct acpi_battery_hook *hook)
+{
+	struct lwmi_om_priv *priv = container_of(hook, struct lwmi_om_priv, battery_hook);
+
+	return power_supply_register_extension(battery, &lwmi_om_psy_extension,
+					       &priv->wdev->dev, priv);
+}
+
+static int lwmi_om_battery_remove(struct power_supply *battery,
+				  struct acpi_battery_hook *hook)
+{
+	power_supply_unregister_extension(battery, &lwmi_om_psy_extension);
+
+	return 0;
+}
+
+static acpi_status lwmi_om_acpi_match(acpi_handle handle, u32 level,
+				      void *context, void **return_value)
+{
+	acpi_handle *matched_handle = context;
+
+	if (!handle)
+		return AE_OK;
+
+	*matched_handle = handle;
+
+	return AE_CTRL_TERMINATE;
+}
+
+static void lwmi_om_psy_ext_init(struct lwmi_om_priv *priv)
+{
+	struct capdata00 capdata;
+	acpi_handle ideapad_handle = NULL;
+	acpi_status status;
+	int ret;
+
+	ret = lwmi_cd00_get_data(priv->cd00_list, LWMI_ATTR_ID_PSU_CHARGE_TYPES,
+				 &capdata);
+	if (ret || (capdata.supported & (LWMI_SUPP_VALID | LWMI_SUPP_GET)) !=
+		   (LWMI_SUPP_VALID | LWMI_SUPP_GET))
+		return;
+
+	/* Prefer ideapad_laptop when its native conservation mode is available. */
+	status = acpi_get_devices("VPC2004", lwmi_om_acpi_match, &ideapad_handle, NULL);
+	if (ACPI_FAILURE(status))
+		return;
+
+	if (ideapad_handle && acpi_has_method(ideapad_handle, "GBMD") &&
+	    acpi_has_method(ideapad_handle, "SBMC"))
+		return;
+
+	priv->battery_hook.add_battery = lwmi_om_battery_add;
+	priv->battery_hook.remove_battery = lwmi_om_battery_remove;
+	priv->battery_hook.name = "Lenovo WMI Other Battery Extension";
+	battery_hook_register(&priv->battery_hook);
+	priv->battery_hook_registered = true;
+}
+
+static void lwmi_om_psy_ext_remove(struct lwmi_om_priv *priv)
+{
+	if (!priv->battery_hook_registered)
+		return;
+
+	battery_hook_unregister(&priv->battery_hook);
+	priv->battery_hook_registered = false;
 }
 
 /* ======== fw_attributes (component: lenovo-wmi-capdata 01) ======== */
@@ -1285,6 +1471,7 @@ static int lwmi_om_master_bind(struct device *dev)
 	}
 
 	lwmi_om_fan_info_collect_cd00(priv);
+	lwmi_om_psy_ext_init(priv);
 
 	lwmi_om_fw_attr_add(priv);
 
@@ -1306,6 +1493,7 @@ static void lwmi_om_master_unbind(struct device *dev)
 	lwmi_om_fw_attr_remove(priv);
 
 	lwmi_om_hwmon_remove(priv);
+	lwmi_om_psy_ext_remove(priv);
 
 	component_unbind_all(dev, NULL);
 }
