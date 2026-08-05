@@ -46,6 +46,9 @@ The following HWMON attributes are implemented:
  - fanX_input: current RPM
  - fanX_target: target RPM (tunable, 0=auto)
 
+The following firmware attribute is implemented:
+ - fan_full_speed: Enable full fan speed mode
+
 Due to the internal RPM divisor, the current/target RPMs are rounded down to
 its nearest multiple. The divisor itself is not necessary to be a power of two.
 
