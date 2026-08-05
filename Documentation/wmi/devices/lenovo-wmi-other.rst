@@ -31,7 +31,8 @@ under the following path:
 
   /sys/class/firmware-attributes/lenovo-wmi-other/attributes/<attribute>/
 
-Additionally, this driver also exports attributes to HWMON.
+Additionally, this driver also exports attributes to HWMON and extends the
+ACPI battery power supply with supported charging controls.
 
 LENOVO_CAPABILITY_DATA_00
 -------------------------
@@ -48,6 +49,9 @@ The following HWMON attributes are implemented:
 
 The following firmware attribute is implemented:
  - fan_full_speed: Enable full fan speed mode
+
+The following power supply attribute is implemented:
+ - charge_types: Standard / Long Life (80% charge limit)
 
 Due to the internal RPM divisor, the current/target RPMs are rounded down to
 its nearest multiple. The divisor itself is not necessary to be a power of two.
