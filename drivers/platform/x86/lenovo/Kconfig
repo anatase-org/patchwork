@@ -260,6 +260,17 @@ config LENOVO_WMI_GAMEZONE
 	  To compile this driver as a module, choose M here: the module will
 	  be called lenovo-wmi-gamezone.
 
+config LENOVO_WMI_GAMEZONE_FAN
+	tristate "Lenovo GameZone WMI Fan Driver"
+	depends on ACPI_WMI
+	select HWMON
+	help
+	  Say Y here if you have a WMI aware Lenovo Legion device and would like to
+	  configure the platform fan curve.
+
+	  To compile this driver as a module, choose M here: the module will
+	  be called lenovo-wmi-gamezone-fan.
+
 config LENOVO_WMI_TUNING
 	tristate "Lenovo Other Mode WMI Driver"
 	depends on ACPI_WMI

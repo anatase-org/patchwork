@@ -50,6 +50,25 @@ or the setting will have no effect. If another profile is set from the list
 of supported profiles, the BIOS will override any user PPT settings when
 switching to that profile.
 
+Gamezone Fan
+------------
+
+WMI GUID ``92549549-4BDE-4F06-AC04-CE8BF898DBAA``
+
+The Gamezone Fan interface provides a platform fan curve, exposed through HWMON
+as ten ``pwm1_auto_pointX_pwm`` and ``pwm1_auto_pointX_temp`` pairs. PWM values
+use the standard range from 0 to 255 and temperatures are in degrees Celsius.
+
+Setting the fan curve is always honored in ``custom`` mode and depending on
+the BIOS and make, on other modes as well. For example, original Legion Go
+and Go S devices honor it on all modes, with later BIOS versions only
+restricting it to ``custom``. Moreover, newer Legion devices, starting with Go
+S, enforce BIOS limits on the fan curve that are not exposed through WMI. On
+Legion Go S, those limits happen to be the default fan curve on each preset.
+I.e., it is not possible to make the device more silent than its factory
+preset. As there is no way to query the BIOS limits, the driver does not
+attempt to check them, deferring to the BIOS to enforce them.
+
 Gamezone Thermal Mode Event
 ---------------------------
 

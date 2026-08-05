@@ -16,6 +16,7 @@ lenovo-target-$(CONFIG_LENOVO_WMI_CAPDATA)	+= wmi-capdata.o
 lenovo-target-$(CONFIG_LENOVO_WMI_EVENTS)	+= wmi-events.o
 lenovo-target-$(CONFIG_LENOVO_WMI_HELPERS)	+= wmi-helpers.o
 lenovo-target-$(CONFIG_LENOVO_WMI_GAMEZONE)	+= wmi-gamezone.o
+lenovo-target-$(CONFIG_LENOVO_WMI_GAMEZONE_FAN)	+= wmi-gamezone-fan.o
 lenovo-target-$(CONFIG_LENOVO_WMI_TUNING)	+= wmi-other.o
 
 # Add 'lenovo' prefix to each module listed in lenovo-target-*
