@@ -59,6 +59,7 @@
 #define LWMI_FEATURE_ID_CPU_SPL 0x02
 #define LWMI_FEATURE_ID_CPU_FPPT 0x03
 
+#define LWMI_FEATURE_ID_FAN_FULL_SPEED 0x02
 #define LWMI_FEATURE_ID_FAN_RPM 0x03
 
 #define LWMI_FEATURE_VALUE_GET 17
@@ -73,6 +74,10 @@
 #define LWMI_ATTR_ID_FAN_RPM(x)                                   \
 	lwmi_attr_id(LWMI_DEVICE_ID_FAN, LWMI_FEATURE_ID_FAN_RPM, \
 		     LWMI_GZ_THERMAL_MODE_NONE, LWMI_FAN_ID(x))
+
+#define LWMI_ATTR_ID_FAN_FULL_SPEED                                      \
+	lwmi_attr_id(LWMI_DEVICE_ID_FAN, LWMI_FEATURE_ID_FAN_FULL_SPEED, \
+		     LWMI_GZ_THERMAL_MODE_NONE, LWMI_TYPE_ID_NONE)
 
 #define LWMI_OM_FW_ATTR_BASE_PATH "lenovo-wmi-other"
 #define LWMI_OM_HWMON_NAME "lenovo_wmi_other"
@@ -110,6 +115,7 @@ struct lwmi_om_priv {
 	int ida_id;
 
 	struct lwmi_fan_info fan_info[LWMI_FAN_NR];
+	bool full_fan_speed_created;
 
 	struct {
 		bool capdata00_collected : 1;
@@ -550,6 +556,13 @@ struct tunable_attr_01 {
 	u8 cv_mode_id; /* mode arg for set/get current_value */
 };
 
+struct tunable_attr_00 {
+	struct device *dev;
+	u32 default_value;
+};
+
+static struct tunable_attr_00 fan_full_speed;
+
 /**
  * tunable_attr_01_id() - Formats a tunable_attr_01 to a capdata attribute ID
  * @attr: The tunable_attr_01 to format.
@@ -695,6 +708,88 @@ static ssize_t int_type_show(struct kobject *kobj, struct kobj_attribute *kattr,
 			     char *buf)
 {
 	return sysfs_emit(buf, "integer\n");
+}
+
+static int lwmi_full_fan_speed_get(struct lwmi_om_priv *priv, u32 *value)
+{
+	struct wmi_method_args_32 args = {
+		.arg0 = LWMI_ATTR_ID_FAN_FULL_SPEED,
+	};
+	u32 retval;
+	int ret;
+
+	ret = lwmi_dev_evaluate_int(priv->wdev, 0x0, LWMI_FEATURE_VALUE_GET,
+				    (u8 *)&args, sizeof(args), &retval);
+	if (ret)
+		return ret;
+	if (retval > 1)
+		return -ERANGE;
+
+	*value = retval;
+	return 0;
+}
+
+static ssize_t fan_full_speed_current_value_show(struct kobject *kobj,
+						 struct kobj_attribute *kattr,
+						 char *buf)
+{
+	struct lwmi_om_priv *priv = dev_get_drvdata(fan_full_speed.dev);
+	u32 value;
+	int ret;
+
+	ret = lwmi_full_fan_speed_get(priv, &value);
+	if (ret)
+		return ret;
+
+	return sysfs_emit(buf, "%u\n", value);
+}
+
+static ssize_t fan_full_speed_current_value_store(struct kobject *kobj,
+						  struct kobj_attribute *kattr,
+						  const char *buf, size_t count)
+{
+	struct lwmi_om_priv *priv = dev_get_drvdata(fan_full_speed.dev);
+	struct wmi_method_args_32 args = {
+		.arg0 = LWMI_ATTR_ID_FAN_FULL_SPEED,
+	};
+	u32 value;
+	int ret;
+
+	ret = kstrtouint(buf, 10, &value);
+	if (ret)
+		return ret;
+	if (value > 1)
+		return -EINVAL;
+
+	args.arg1 = value;
+	ret = lwmi_dev_evaluate_int(priv->wdev, 0x0, LWMI_FEATURE_VALUE_SET,
+				    (u8 *)&args, sizeof(args), NULL);
+	if (ret)
+		return ret;
+
+	return count;
+}
+
+static bool lwmi_full_fan_speed_is_supported(struct lwmi_om_priv *priv)
+{
+	const u32 required = LWMI_SUPP_VALID | LWMI_SUPP_GET | LWMI_SUPP_SET;
+	struct capdata00 capdata;
+	u32 value;
+	int ret;
+
+	ret = lwmi_cd00_get_data(priv->cd00_list, LWMI_ATTR_ID_FAN_FULL_SPEED,
+				 &capdata);
+	if (ret || (capdata.supported & required) != required ||
+	    capdata.default_value > 1)
+		return false;
+
+	ret = lwmi_full_fan_speed_get(priv, &value);
+	if (ret)
+		return false;
+
+	fan_full_speed.dev = &priv->wdev->dev;
+	fan_full_speed.default_value = capdata.default_value;
+	return true;
 }
 
 /**
@@ -1011,6 +1106,34 @@ static bool lwmi_attr_01_is_supported(struct tunable_attr_01 *tunable_attr)
 		.name = _fsname, .attrs = _attrname##_attrs               \
 	}
 
+static struct kobj_attribute attr_fan_full_speed_current_value =
+	__LWMI_ATTR_RW(fan_full_speed, current_value);
+__LWMI_ATTR_SHOW_FMT(default_value, fan_full_speed, "%u\n",
+		     fan_full_speed.default_value);
+__LWMI_ATTR_SHOW_FMT(display_name, fan_full_speed, "%s\n",
+		     "Set full fan speed mode");
+__LWMI_ATTR_SHOW_FMT(max_value, fan_full_speed, "%u\n", 1);
+__LWMI_ATTR_SHOW_FMT(min_value, fan_full_speed, "%u\n", 0);
+__LWMI_ATTR_SHOW_FMT(scalar_increment, fan_full_speed, "%u\n", 1);
+static struct kobj_attribute attr_fan_full_speed_type =
+	__LWMI_ATTR_RO_AS(type, int_type_show);
+
+static struct attribute *fan_full_speed_attrs[] = {
+	&attr_fan_full_speed_current_value.attr,
+	&attr_fan_full_speed_default_value.attr,
+	&attr_fan_full_speed_display_name.attr,
+	&attr_fan_full_speed_max_value.attr,
+	&attr_fan_full_speed_min_value.attr,
+	&attr_fan_full_speed_scalar_increment.attr,
+	&attr_fan_full_speed_type.attr,
+	NULL,
+};
+
+static const struct attribute_group fan_full_speed_attr_group = {
+	.name = "fan_full_speed",
+	.attrs = fan_full_speed_attrs,
+};
+
 LWMI_ATTR_GROUP_TUNABLE_CAP01(ppt_pl1_spl, "ppt_pl1_spl",
 			      "Set the CPU sustained power limit");
 LWMI_ATTR_GROUP_TUNABLE_CAP01(ppt_pl2_sppt, "ppt_pl2_sppt",
@@ -1066,6 +1189,15 @@ static void lwmi_om_fw_attr_add(struct lwmi_om_priv *priv)
 		if (err)
 			goto err_remove_groups;
 	}
+
+	if (lwmi_full_fan_speed_is_supported(priv)) {
+		err = sysfs_create_group(&priv->fw_attr_kset->kobj,
+					 &fan_full_speed_attr_group);
+		if (err)
+			goto err_remove_groups;
+
+		priv->full_fan_speed_created = true;
+	}
 	return;
 
 err_remove_groups:
@@ -1096,6 +1228,11 @@ static void lwmi_om_fw_attr_remove(struct lwmi_om_priv *priv)
 {
 	if (priv->ida_id < 0)
 		return;
+	if (priv->full_fan_speed_created) {
+		sysfs_remove_group(&priv->fw_attr_kset->kobj,
+				   &fan_full_speed_attr_group);
+		priv->full_fan_speed_created = false;
+	}
 
 	for (unsigned int i = 0; i < ARRAY_SIZE(cd01_attr_groups) - 1; i++)
 		sysfs_remove_group(&priv->fw_attr_kset->kobj,
