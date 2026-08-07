@@ -271,6 +271,18 @@ config LENOVO_WMI_GAMEZONE_FAN
 	  To compile this driver as a module, choose M here: the module will
 	  be called lenovo-wmi-gamezone-fan.
 
+config LENOVO_WMI_LIGHTING
+	tristate "Lenovo WMI Lighting Driver"
+	depends on ACPI_WMI
+	select LEDS_CLASS
+	select NEW_LEDS
+	help
+	  Say Y here if you have a WMI aware Lenovo device and would like to
+	  control its power and standby indicator LEDs.
+
+	  To compile this driver as a module, choose M here: the module will
+	  be called lenovo-wmi-lighting.
+
 config LENOVO_WMI_TUNING
 	tristate "Lenovo Other Mode WMI Driver"
 	depends on ACPI_WMI
