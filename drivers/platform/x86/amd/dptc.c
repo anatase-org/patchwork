@@ -405,6 +405,23 @@ static const struct dmi_system_id dptc_dmi_table[] = {
 		},
 		.driver_data = (void *)&limits_30w,
 	},
+	/* OneXPlayer AI MAX handhelds */
+	{
+		.ident = "ONEXPLAYER X2Mini PRO",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER X2Mini PRO"),
+		},
+		.driver_data = (void *)&limits_maxhh,
+	},
+	{
+		.ident = "ONEXPLAYER APEX",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER APEX"),
+		},
+		.driver_data = (void *)&limits_maxhh,
+	},
 	/* AYANEO - 15W */
 	{
 		.ident = "AYANEO AIR",
