@@ -20,6 +20,7 @@
 #include <linux/export.h>
 #include <linux/kmemleak.h>
 #include <linux/cc_platform.h>
+#include <linux/dmi.h>
 #include <linux/iopoll.h>
 #include <asm/pci-direct.h>
 #include <asm/iommu.h>
@@ -3317,6 +3318,24 @@ out:
 	return ret;
 }
 
+static const struct dmi_system_id amd_iommu_disabled_dmi_table[] __initconst = {
+	{
+		.ident = "OneXPlayer APEX",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER APEX"),
+		},
+	},
+	{
+		.ident = "OneXPlayer X2 Mini Pro",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER X2Mini PRO"),
+		},
+	},
+	{}
+};
+
 static bool __init detect_ivrs(void)
 {
 	struct acpi_table_header *ivrs_base;
@@ -3336,6 +3355,11 @@ static bool __init detect_ivrs(void)
 
 	if (amd_iommu_force_enable)
 		goto out;
+
+	if (dmi_check_system(amd_iommu_disabled_dmi_table)) {
+		pr_info("Disabled on this platform due to a firmware issue\n");
+		return false;
+	}
 
 	/* Don't use IOMMU if there is Stoney Ridge graphics */
 	for (i = 0; i < 32; i++) {
