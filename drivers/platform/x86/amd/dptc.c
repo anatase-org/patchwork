@@ -172,7 +172,7 @@ static const struct dptc_device_limits limits_maxhh = {
 	.profiles = {
 		[PLATFORM_PROFILE_LOW_POWER]   = { .vals = { 15, 15, 25, 0 } },
 		[PLATFORM_PROFILE_BALANCED]    = { .vals = { 25, 27, 40, 0 } },
-		[PLATFORM_PROFILE_PERFORMANCE] = { .vals = { 60, 63, 85, 0 } },
+		[PLATFORM_PROFILE_PERFORMANCE] = { .vals = { 45, 50, 60, 0 } },
 	},
 };
 
