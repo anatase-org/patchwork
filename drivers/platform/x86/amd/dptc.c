@@ -180,6 +180,7 @@ static const struct dptc_device_limits limits_maxhh = {
 static const char * const dptc_soc_table[] = {
 	/* AI MAX */
 	"AMD RYZEN AI MAX+ 395",
+	"AMD RYZEN AI MAX+ 388",
 	"AMD RYZEN AI MAX+ 385",
 	"AMD RYZEN AI MAX 380",
 	/* Ryzen AI */
