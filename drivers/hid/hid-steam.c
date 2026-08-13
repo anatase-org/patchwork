@@ -1465,15 +1465,13 @@ static void steam_work_connect_cb(struct work_struct *work)
 
 	unsigned long flags;
 	bool connected;
-	bool opened;
 	int ret;
 
 	spin_lock_irqsave(&steam->lock, flags);
-	opened = steam->client_opened;
 	connected = steam->connected;
 	spin_unlock_irqrestore(&steam->lock, flags);
 
-	if (connected && !opened) {
+	if (connected) {
 		ret = steam_register(steam);
 		if (ret)
 			hid_err(steam->hdev,
@@ -2540,8 +2538,7 @@ static int steam_raw_event(struct hid_device *hdev,
 		return 0;
 
 	guard(spinlock_irqsave)(&steam->lock);
-	if (steam->client_opened)
-		hid_input_report(steam->client_hdev, report->type, data, size, 0);
+	hid_input_report(steam->client_hdev, report->type, data, size, 0);
 
 	/* Ibex uses a different report format */
 	if (steam->quirks & STEAM_QUIRK_IBEX) {
@@ -2551,8 +2548,6 @@ static int steam_raw_event(struct hid_device *hdev,
 		switch (report->id) {
 		case REPORT_ID_INPUT:
 			if (size != 54)
-				return 0;
-			if (steam->client_opened)
 				return 0;
 			rcu_read_lock();
 			input = rcu_dereference(steam->input);
@@ -2570,8 +2565,6 @@ static int steam_raw_event(struct hid_device *hdev,
 			break;
 		case REPORT_ID_INPUT2:
 			if (size != 46)
-				return 0;
-			if (steam->client_opened)
 				return 0;
 			rcu_read_lock();
 			input = rcu_dereference(steam->input);
@@ -2641,8 +2634,6 @@ static int steam_raw_event(struct hid_device *hdev,
 
 	switch (data[2]) {
 	case ID_CONTROLLER_STATE:
-		if (steam->client_opened)
-			return 0;
 		rcu_read_lock();
 		input = rcu_dereference(steam->input);
 		if (likely(input))
@@ -2653,8 +2644,6 @@ static int steam_raw_event(struct hid_device *hdev,
 		rcu_read_unlock();
 		break;
 	case ID_CONTROLLER_DECK_STATE:
-		if (steam->client_opened)
-			return 0;
 		rcu_read_lock();
 		input = rcu_dereference(steam->input);
 		if (likely(input))
