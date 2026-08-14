@@ -304,6 +304,28 @@ static const struct dmi_system_id dmi_table[] = {
 	{},
 };
 
+static const struct dmi_system_id oxp_lps0_delay_quirks[] = {
+	{
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER APEX"),
+		},
+	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER X2Mini PRO"),
+		},
+	},
+	{}
+};
+
+static struct acpi_s2idle_dev_ops oxp_s2idle_dev_ops = {
+	.begin_delay = 2000,
+};
+
+static bool oxp_lps0_dev_registered;
+
 #define OXP_KEYBOARD_VID_QINHENG	0x1a86
 #define OXP_KEYBOARD_PID_K2445		0x1305
 #define OXP_KEYBOARD_VID_HAILUCK	0x258a
@@ -1072,7 +1094,21 @@ static int oxp_platform_probe(struct platform_device *pdev)
 		break;
 	}
 
+	if (dmi_check_system(oxp_lps0_delay_quirks)) {
+		ret = acpi_register_lps0_dev(&oxp_s2idle_dev_ops);
+		if (!ret)
+			oxp_lps0_dev_registered = true;
+	}
+
 	return 0;
+}
+
+static void oxp_platform_remove(struct platform_device *pdev)
+{
+	if (oxp_lps0_dev_registered) {
+		acpi_unregister_lps0_dev(&oxp_s2idle_dev_ops);
+		oxp_lps0_dev_registered = false;
+	}
 }
 
 static struct platform_driver oxp_platform_driver = {
@@ -1081,6 +1117,7 @@ static struct platform_driver oxp_platform_driver = {
 		.dev_groups = oxp_ec_groups,
 	},
 	.probe = oxp_platform_probe,
+	.remove = oxp_platform_remove,
 };
 
 static struct platform_device *oxp_platform_device;
