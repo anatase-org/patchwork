@@ -14,7 +14,11 @@ allOf:
 
 properties:
   compatible:
-    const: visionox,vtdr6130
+    oneOf:
+      - const: visionox,vtdr6130
+      - items:
+          - const: retroidpocket,rp6-panel
+          - const: visionox,vtdr6130
 
   reg:
     maxItems: 1
@@ -25,6 +29,7 @@ properties:
   vdd-supply: true
   port: true
   reset-gpios: true
+  rotation: true
 
 additionalProperties: false
 
@@ -33,7 +38,6 @@ required:
   - reg
   - vddio-supply
   - vci-supply
-  - vdd-supply
   - reset-gpios
   - port
 
