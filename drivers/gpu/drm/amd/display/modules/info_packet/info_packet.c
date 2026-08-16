@@ -483,6 +483,19 @@ void mod_build_vsc_infopacket(const struct dc_stream_state *stream,
 	}
 }
 
+static bool is_hdmi_vic_mode(const struct dc_stream_state *stream)
+{
+	enum dc_timing_3d_format format = stream->timing.timing_3d_format;
+
+	if (stream->view_format == VIEW_3D_FORMAT_NONE)
+		format = TIMING_3D_FORMAT_NONE;
+
+	return stream->timing.hdmi_vic != 0 &&
+		stream->timing.h_total >= 3840 &&
+		stream->timing.v_total >= 2160 &&
+		format == TIMING_3D_FORMAT_NONE;
+}
+
 /**
  *  mod_build_hf_vsif_infopacket - Prepare HDMI Vendor Specific info frame.
  *                                 Follows HDMI Spec to build up Vendor Specific info frame
@@ -504,11 +517,7 @@ void mod_build_hf_vsif_infopacket(const struct dc_stream_state *stream,
 		if (stream->view_format == VIEW_3D_FORMAT_NONE)
 			format = TIMING_3D_FORMAT_NONE;
 
-		if (stream->timing.hdmi_vic != 0
-				&& stream->timing.h_total >= 3840
-				&& stream->timing.v_total >= 2160
-				&& format == TIMING_3D_FORMAT_NONE)
-			hdmi_vic_mode = true;
+		hdmi_vic_mode = is_hdmi_vic_mode(stream);
 
 		if ((format == TIMING_3D_FORMAT_NONE) && !hdmi_vic_mode)
 			return;
