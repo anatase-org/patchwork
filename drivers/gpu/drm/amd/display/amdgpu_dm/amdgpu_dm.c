@@ -9699,6 +9699,7 @@ static void update_stream_irq_parameters(
 	struct mod_freesync_config config = new_crtc_state->freesync_config;
 	struct amdgpu_device *adev = dm->adev;
 	struct amdgpu_crtc *acrtc = to_amdgpu_crtc(new_crtc_state->base.crtc);
+	struct amdgpu_dm_connector *aconn;
 	unsigned long flags;
 
 	if (!new_stream)
@@ -9713,6 +9714,7 @@ static void update_stream_irq_parameters(
 
 	spin_lock_irqsave(&adev_to_drm(adev)->event_lock, flags);
 	vrr_params = acrtc->dm_irq_params.vrr_params;
+	aconn = (struct amdgpu_dm_connector *)new_stream->dm_stream_context;
 
 	if (new_crtc_state->vrr_supported &&
 	    config.min_refresh_in_uhz &&
@@ -9733,6 +9735,9 @@ static void update_stream_irq_parameters(
 						     VRR_STATE_ACTIVE_VARIABLE :
 						     VRR_STATE_INACTIVE;
 		}
+
+		if (aconn && aconn->as_type == ADAPTIVE_SYNC_TYPE_PCON_ALLOWED)
+			new_stream->freesync_on_desktop = true;
 	} else {
 		config.state = VRR_STATE_UNSUPPORTED;
 	}
