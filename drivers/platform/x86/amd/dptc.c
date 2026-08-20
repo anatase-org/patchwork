@@ -182,6 +182,7 @@ static const char * const dptc_soc_table[] = {
 	"AMD RYZEN AI MAX+ 395",
 	"AMD RYZEN AI MAX+ 388",
 	"AMD RYZEN AI MAX+ 385",
+	"AMD RYZEN AI MAX 385",
 	"AMD RYZEN AI MAX 380",
 	/* Ryzen AI */
 	"AMD Ryzen AI 9 HX 370",
