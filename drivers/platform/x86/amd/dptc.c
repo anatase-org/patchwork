@@ -201,6 +201,16 @@ static const char * const dptc_soc_table[] = {
 };
 
 static const struct dmi_system_id dptc_dmi_table[] = {
+	/* Minisforum */
+	{
+		.ident = "Minisforum V3",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_BOARD_VENDOR,
+					"Shenzhen Meigao Electronic Equipment Co.,Ltd"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "HPPAC"),
+		},
+		.driver_data = (void *)&limits_28w,
+	},
 	/* GPD */
 	{
 		.ident = "GPD Win Mini",
