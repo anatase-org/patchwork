@@ -698,10 +698,15 @@ static void asus_kbd_rgb_work(struct asus_kbd_leds *led)
 		{ FEATURE_KBD_LED_REPORT_ID1, 0xB5 }, /* apply mode */
 		{ FEATURE_KBD_LED_REPORT_ID1, 0xB4 }, /* save to mem */
 	};
+	struct asus_drvdata *drvdata = hid_get_drvdata(led->hdev);
 	unsigned long flags;
 	uint8_t colors[3];
 	bool rgb_init, rgb_set;
+	u8 report_id;
 	int ret;
+
+	report_id = drvdata->is_xgm ? FEATURE_KBD_LED_REPORT_ID2 :
+		FEATURE_KBD_LED_REPORT_ID1;
 
 	spin_lock_irqsave(&led->lock, flags);
 	rgb_init = led->rgb_init;
@@ -716,7 +721,7 @@ static void asus_kbd_rgb_work(struct asus_kbd_leds *led)
 		return;
 
 	if (rgb_init) {
-		ret = asus_kbd_init(led->hdev, FEATURE_KBD_LED_REPORT_ID1);
+		ret = asus_kbd_init(led->hdev, report_id);
 		if (ret < 0) {
 			hid_err(led->hdev, "Asus failed to init RGB: %d\n", ret);
 			return;
@@ -732,6 +737,7 @@ static void asus_kbd_rgb_work(struct asus_kbd_leds *led)
 	rgb_buf[0][6] = colors[2];
 
 	for (size_t i = 0; i < ARRAY_SIZE(rgb_buf); i++) {
+		rgb_buf[i][0] = report_id;
 		ret = asus_kbd_set_report(led->hdev, rgb_buf[i], sizeof(rgb_buf[i]));
 		if (ret < 0) {
 			hid_err(led->hdev, "Asus failed to set RGB: %d\n", ret);
@@ -766,7 +772,8 @@ static int asus_kbd_register_leds(struct hid_device *hdev)
 		return ret;
 
 	/* Check for backlight support */
-	if (!(kbd_func & SUPPORT_KBD_BACKLIGHT))
+	if (!(kbd_func & SUPPORT_KBD_BACKLIGHT) &&
+	    !(drvdata->quirks & QUIRK_XGM))
 		return -ENODEV;
 
 	if (drvdata->quirks & QUIRK_ROG_NKEY_ID1ID2_INIT) {
@@ -1592,7 +1599,8 @@ static const struct hid_device_id asus_devices[] = {
 	},
 	{ HID_USB_DEVICE(USB_VENDOR_ID_ASUSTEK,
 	    USB_DEVICE_ID_ASUSTEK_XGM_2025),
-	  QUIRK_XGM | QUIRK_USE_KBD_BACKLIGHT | QUIRK_ROG_NKEY_KEYBOARD },
+	  QUIRK_XGM | QUIRK_USE_KBD_BACKLIGHT | QUIRK_ROG_NKEY_KEYBOARD |
+	  QUIRK_ROG_NKEY_RGB },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_ASUSTEK,
 	    USB_DEVICE_ID_ASUSTEK_ROG_CLAYMORE_II_KEYBOARD),
 	  QUIRK_ROG_CLAYMORE_II_KEYBOARD },
