@@ -94,6 +94,7 @@ MODULE_DESCRIPTION("Asus HID Keyboard and TouchPad");
 #define QUIRK_ROG_NKEY_KEYBOARD		BIT(11)
 #define QUIRK_ROG_CLAYMORE_II_KEYBOARD	BIT(12)
 #define QUIRK_HID_FN_LOCK		BIT(13)
+#define QUIRK_XGM			BIT(16)
 
 #define I2C_KEYBOARD_QUIRKS			(QUIRK_FIX_NOTEBOOK_REPORT | \
 						 QUIRK_NO_INIT_REPORTS | \
@@ -164,6 +165,7 @@ struct asus_drvdata {
 	unsigned long battery_next_query;
 	struct asus_hid_listener listener;
 	bool fn_lock;
+	bool is_xgm;
 };
 
 static int asus_report_battery(struct asus_drvdata *, u8 *, int);
@@ -608,6 +610,15 @@ static int asus_kbd_init(struct hid_device *hdev, u8 report_id)
 	 * verified to work for all devices.
 	 */
 	return 0;
+}
+
+static int asus_xgm_enable(struct hid_device *hdev, bool enable)
+{
+	const u8 buf[FEATURE_KBD_REPORT_SIZE] = {
+		FEATURE_KBD_LED_REPORT_ID2, 0xe4, enable ? 0x02 : 0x01
+	};
+
+	return asus_kbd_set_report(hdev, buf, sizeof(buf));
 }
 
 static int asus_kbd_get_functions(struct hid_device *hdev,
@@ -1244,6 +1255,15 @@ static int asus_start_multitouch(struct hid_device *hdev)
 static int __maybe_unused asus_resume(struct hid_device *hdev)
 {
 	struct asus_drvdata *drvdata = hid_get_drvdata(hdev);
+	int ret;
+
+	if (drvdata->is_xgm) {
+		ret = asus_xgm_enable(hdev, true);
+		if (ret < 0) {
+			hid_err(hdev, "Asus failed to start XG Mobile: %d\n", ret);
+			return ret;
+		}
+	}
 
 	/*
 	 * If we have a backlight listener registered, restore the previous state,
@@ -1252,6 +1272,21 @@ static int __maybe_unused asus_resume(struct hid_device *hdev)
 	 */
 	if (drvdata->listener.brightness_set)
 		asus_kbd_backlight_set(&drvdata->listener, drvdata->kbd_backlight_brightness);
+
+	return 0;
+}
+
+static int __maybe_unused asus_suspend(struct hid_device *hdev,
+				       pm_message_t message)
+{
+	struct asus_drvdata *drvdata = hid_get_drvdata(hdev);
+	int ret;
+
+	if (drvdata->is_xgm && !PMSG_IS_AUTO(message)) {
+		ret = asus_xgm_enable(hdev, false);
+		if (ret < 0)
+			hid_err(hdev, "Asus failed to stop XG Mobile: %d\n", ret);
+	}
 
 	return 0;
 }
@@ -1391,6 +1426,13 @@ static int asus_probe(struct hid_device *hdev, const struct hid_device_id *id)
 		(asus_kbd_register_leds(hdev)))
 		hid_warn(hdev, "Failed to initialize backlight.\n");
 
+	if ((drvdata->quirks & QUIRK_XGM) && is_vendor) {
+		drvdata->is_xgm = true;
+		ret = asus_xgm_enable(hdev, true);
+		if (ret < 0)
+			hid_warn(hdev, "Failed to start XG Mobile: %d\n", ret);
+	}
+
 	/*
 	 * For ROG keyboards, skip rename for consistency and ->input check as
 	 * some devices do not have inputs.
@@ -1430,12 +1472,32 @@ err_stop_hw:
 static void asus_remove(struct hid_device *hdev)
 {
 	struct asus_drvdata *drvdata = hid_get_drvdata(hdev);
+	int ret;
+
+	if (drvdata->is_xgm) {
+		ret = asus_xgm_enable(hdev, false);
+		if (ret < 0)
+			hid_warn(hdev, "Failed to stop XG Mobile: %d\n", ret);
+	}
 
 	if (drvdata->listener.brightness_set)
 		asus_hid_unregister_listener(&drvdata->listener);
 
 	asus_worker_stop(drvdata->worker);
 	hid_hw_stop(hdev);
+}
+
+static void asus_shutdown(struct device *dev)
+{
+	struct hid_device *hdev = to_hid_device(dev);
+	struct asus_drvdata *drvdata = hid_get_drvdata(hdev);
+	int ret;
+
+	if (drvdata->is_xgm) {
+		ret = asus_xgm_enable(hdev, false);
+		if (ret < 0)
+			hid_warn(hdev, "Failed to stop XG Mobile: %d\n", ret);
+	}
 }
 
 static const __u8 asus_g752_fixed_rdesc[] = {
@@ -1580,6 +1642,9 @@ static const struct hid_device_id asus_devices[] = {
 	    USB_DEVICE_ID_ASUSTEK_XGM_2023),
 	},
 	{ HID_USB_DEVICE(USB_VENDOR_ID_ASUSTEK,
+	    USB_DEVICE_ID_ASUSTEK_XGM_2025),
+	  QUIRK_XGM | QUIRK_USE_KBD_BACKLIGHT | QUIRK_ROG_NKEY_KEYBOARD },
+	{ HID_USB_DEVICE(USB_VENDOR_ID_ASUSTEK,
 	    USB_DEVICE_ID_ASUSTEK_ROG_CLAYMORE_II_KEYBOARD),
 	  QUIRK_ROG_CLAYMORE_II_KEYBOARD },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_ASUSTEK,
@@ -1626,9 +1691,11 @@ static struct hid_driver asus_driver = {
 	.input_mapping          = asus_input_mapping,
 	.input_configured       = asus_input_configured,
 	.reset_resume           = pm_ptr(asus_reset_resume),
+	.suspend                = pm_ptr(asus_suspend),
 	.resume			= pm_ptr(asus_resume),
 	.event			= asus_event,
-	.raw_event		= asus_raw_event
+	.raw_event		= asus_raw_event,
+	.driver.shutdown	= asus_shutdown,
 };
 module_hid_driver(asus_driver);
 
