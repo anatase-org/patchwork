@@ -105,6 +105,20 @@ config HID_HAPTIC
 
 menu "Special HID drivers"
 
+config HID_8BITDO
+	tristate "8BitDo controller support"
+	depends on HIDRAW
+	select INPUT_FF_MEMLESS
+	select POWER_SUPPLY
+	help
+	  Support for 8BitDo controllers using the vendor's SDL report
+	  protocol. The driver provides an Xbox-compatible gamepad interface,
+	  motion sensors, force feedback, and battery status. Supported devices
+	  are switched to SDL reporting automatically when they are connected.
+
+	  To compile this driver as a module, choose M here: the module will
+	  be called hid-8bitdo.
+
 config HID_A4TECH
 	tristate "A4TECH mice"
 	default !EXPERT
