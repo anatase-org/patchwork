@@ -2,6 +2,10 @@
 CONFIG_IKCONFIG=y
 CONFIG_IKCONFIG_PROC=y
 
+# Common modules
+CONFIG_HID_8BITDO=m
+CONFIG_INPUT_FF_MEMLESS=y
+
 # Disable these for all arches except arm/x86
 # CONFIG_SND_SOC_AW87XXX is not set
 # CONFIG_JOYSTICK_ODIN2 is not set
