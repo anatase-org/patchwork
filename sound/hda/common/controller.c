@@ -606,6 +606,17 @@ static int azx_pcm_open(struct snd_pcm_substream *substream)
 				     20,
 				     178000000);
 
+	/*
+	 * The AMD HDA playback FIFO can resume with unreliable timing while
+	 * the reported DMA position continues to advance normally. Timer-based
+	 * scheduling then produces audible glitches without reporting an xrun.
+	 * Advertise that behavior so userspace can reserve an extra period of
+	 * headroom on controllers that already need the AMD FIFO workaround.
+	 */
+	if ((chip->driver_caps & AZX_DCAPS_AMD_WORKAROUND) &&
+	    substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+		runtime->hw.info |= SNDRV_PCM_INFO_BATCH;
+
 	if (chip->align_buffer_size)
 		/* constrain buffer sizes to be multiple of 128
 		   bytes. This is more efficient in terms of memory
