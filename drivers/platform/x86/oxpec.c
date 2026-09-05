@@ -53,6 +53,7 @@ enum oxp_board {
 	oxp_g1_i,
 	oxp_g1_a,
 	oxp_super_x,
+	oxp_apex,
 };
 
 static enum oxp_board board;
@@ -98,11 +99,14 @@ static struct notifier_block oxp_usb_notifier;
 #define OXP_X1_CHARGE_LIMIT_REG		0xA3 /* X1 charge limit (%) */
 #define OXP_X1_CHARGE_INHIBIT_REG	0xA4 /* X1 bypass charging */
 
-#define OXP_X1_CHARGE_INHIBIT_MASK_AWAKE	0x01
+#define OXP_APEX_CHARGE_LIMIT_REG	0xE5 /* Apex charge limit (%) */
+#define OXP_APEX_CHARGE_INHIBIT_REG	0xE6 /* Apex bypass charging */
+
+#define OXP_CHARGE_INHIBIT_MASK_AWAKE	0x01
 /* X1 Mask is 0x0A, F1Pro is 0x02 but the extra bit on the X1 does nothing. */
-#define OXP_X1_CHARGE_INHIBIT_MASK_OFF		0x02
-#define OXP_X1_CHARGE_INHIBIT_MASK_ALWAYS	(OXP_X1_CHARGE_INHIBIT_MASK_AWAKE | \
-						 OXP_X1_CHARGE_INHIBIT_MASK_OFF)
+#define OXP_CHARGE_INHIBIT_MASK_OFF		0x02
+#define OXP_CHARGE_INHIBIT_MASK_ALWAYS	(OXP_CHARGE_INHIBIT_MASK_AWAKE | \
+					 OXP_CHARGE_INHIBIT_MASK_OFF)
 
 static const struct dmi_system_id dmi_table[] = {
 	{
@@ -159,7 +163,7 @@ static const struct dmi_system_id dmi_table[] = {
 			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
 			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER APEX"),
 		},
-		.driver_data = (void *)oxp_fly,
+		.driver_data = (void *)oxp_apex,
 	},
 	{
 		.matches = {
@@ -448,6 +452,7 @@ static umode_t tt_toggle_is_visible(struct kobject *kobj,
 	case oxp_g1_i:
 	case oxp_g1_a:
 	case oxp_super_x:
+	case oxp_apex:
 		return attr->mode;
 	default:
 		break;
@@ -478,6 +483,7 @@ static ssize_t tt_toggle_store(struct device *dev,
 	case oxp_mini_amd_pro:
 	case oxp_g1_a:
 	case oxp_super_x:
+	case oxp_apex:
 		reg = OXP_TURBO_SWITCH_REG;
 		mask = OXP_TURBO_TAKE_VAL;
 		break;
@@ -525,6 +531,7 @@ static ssize_t tt_toggle_show(struct device *dev,
 	case oxp_mini_amd_pro:
 	case oxp_g1_a:
 	case oxp_super_x:
+	case oxp_apex:
 		reg = OXP_TURBO_SWITCH_REG;
 		mask = OXP_TURBO_TAKE_VAL;
 		break;
@@ -623,6 +630,7 @@ static bool oxp_psy_ext_supported(void)
 	case oxp_g1_a:
 	case oxp_super_x:
 	case oxp_fly:
+	case oxp_apex:
 		return true;
 	default:
 		break;
@@ -636,12 +644,24 @@ static int oxp_psy_ext_get_prop(struct power_supply *psy,
 				enum power_supply_property psp,
 				union power_supply_propval *val)
 {
+	u8 limit_reg, inhibit_reg;
 	long raw_val;
 	int ret;
 
+	switch (board) {
+		case oxp_apex:
+			limit_reg = OXP_APEX_CHARGE_LIMIT_REG;
+			inhibit_reg = OXP_APEX_CHARGE_INHIBIT_REG;
+			break;
+		default:
+			limit_reg = OXP_X1_CHARGE_LIMIT_REG;
+			inhibit_reg = OXP_X1_CHARGE_INHIBIT_REG;
+			break;
+	}
+
 	switch (psp) {
 	case POWER_SUPPLY_PROP_CHARGE_CONTROL_END_THRESHOLD:
-		ret = read_from_ec(OXP_X1_CHARGE_LIMIT_REG, 1, &raw_val);
+		ret = read_from_ec(limit_reg, 1, &raw_val);
 		if (ret)
 			return ret;
 		if (raw_val < 0 || raw_val > 100)
@@ -649,14 +669,14 @@ static int oxp_psy_ext_get_prop(struct power_supply *psy,
 		val->intval = raw_val;
 		return 0;
 	case POWER_SUPPLY_PROP_CHARGE_BEHAVIOUR:
-		ret = read_from_ec(OXP_X1_CHARGE_INHIBIT_REG, 1, &raw_val);
+		ret = read_from_ec(inhibit_reg, 1, &raw_val);
 		if (ret)
 			return ret;
-		if ((raw_val & OXP_X1_CHARGE_INHIBIT_MASK_ALWAYS) ==
-		    OXP_X1_CHARGE_INHIBIT_MASK_ALWAYS)
+		if ((raw_val & OXP_CHARGE_INHIBIT_MASK_ALWAYS) ==
+		    OXP_CHARGE_INHIBIT_MASK_ALWAYS)
 			val->intval = POWER_SUPPLY_CHARGE_BEHAVIOUR_INHIBIT_CHARGE;
-		else if ((raw_val & OXP_X1_CHARGE_INHIBIT_MASK_AWAKE) ==
-			 OXP_X1_CHARGE_INHIBIT_MASK_AWAKE)
+		else if ((raw_val & OXP_CHARGE_INHIBIT_MASK_AWAKE) ==
+			 OXP_CHARGE_INHIBIT_MASK_AWAKE)
 			val->intval = POWER_SUPPLY_CHARGE_BEHAVIOUR_INHIBIT_CHARGE_AWAKE;
 		else
 			val->intval = POWER_SUPPLY_CHARGE_BEHAVIOUR_AUTO;
@@ -672,29 +692,41 @@ static int oxp_psy_ext_set_prop(struct power_supply *psy,
 				enum power_supply_property psp,
 				const union power_supply_propval *val)
 {
+	u8 limit_reg, inhibit_reg;
 	long raw_val;
+
+	switch (board) {
+		case oxp_apex:
+			limit_reg = OXP_APEX_CHARGE_LIMIT_REG;
+			inhibit_reg = OXP_APEX_CHARGE_INHIBIT_REG;
+			break;
+		default:
+			limit_reg = OXP_X1_CHARGE_LIMIT_REG;
+			inhibit_reg = OXP_X1_CHARGE_INHIBIT_REG;
+			break;
+	}
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_CHARGE_CONTROL_END_THRESHOLD:
 		if (val->intval < 0 || val->intval > 100)
 			return -EINVAL;
-		return write_to_ec(OXP_X1_CHARGE_LIMIT_REG, val->intval);
+		return write_to_ec(limit_reg, val->intval);
 	case POWER_SUPPLY_PROP_CHARGE_BEHAVIOUR:
 		switch (val->intval) {
 		case POWER_SUPPLY_CHARGE_BEHAVIOUR_AUTO:
 			raw_val = 0;
 			break;
 		case POWER_SUPPLY_CHARGE_BEHAVIOUR_INHIBIT_CHARGE_AWAKE:
-			raw_val = OXP_X1_CHARGE_INHIBIT_MASK_AWAKE;
+			raw_val = OXP_CHARGE_INHIBIT_MASK_AWAKE;
 			break;
 		case POWER_SUPPLY_CHARGE_BEHAVIOUR_INHIBIT_CHARGE:
-			raw_val = OXP_X1_CHARGE_INHIBIT_MASK_ALWAYS;
+			raw_val = OXP_CHARGE_INHIBIT_MASK_ALWAYS;
 			break;
 		default:
 			return -EINVAL;
 		}
 
-		return write_to_ec(OXP_X1_CHARGE_INHIBIT_REG, raw_val);
+		return write_to_ec(inhibit_reg, raw_val);
 	default:
 		return -EINVAL;
 	}
@@ -756,6 +788,7 @@ static int oxp_pwm_enable(void)
 	case oxp_g1_i:
 	case oxp_g1_a:
 	case oxp_super_x:
+	case oxp_apex:
 		return write_to_ec(OXP_SENSOR_PWM_ENABLE_REG, PWM_MODE_MANUAL);
 	default:
 		return -EINVAL;
@@ -777,6 +810,7 @@ static int oxp_pwm_disable(void)
 	case oxp_g1_i:
 	case oxp_g1_a:
 	case oxp_super_x:
+	case oxp_apex:
 		return write_to_ec(OXP_SENSOR_PWM_ENABLE_REG, PWM_MODE_AUTO);
 	default:
 		return -EINVAL;
@@ -798,6 +832,7 @@ static int oxp_pwm_read(long *val)
 	case oxp_g1_i:
 	case oxp_g1_a:
 	case oxp_super_x:
+	case oxp_apex:
 		return read_from_ec(OXP_SENSOR_PWM_ENABLE_REG, 1, val);
 	default:
 		return -EOPNOTSUPP;
@@ -835,6 +870,7 @@ static int oxp_pwm_fan_speed(long *val)
 	case oxp_mini_amd_pro:
 	case oxp_g1_a:
 	case oxp_super_x:
+	case oxp_apex:
 		return read_from_ec(OXP_SENSOR_FAN_REG, 2, val);
 	default:
 		return -EOPNOTSUPP;
@@ -868,6 +904,7 @@ static int oxp_pwm_input_write(long val)
 	case oxp_mini_amd_pro:
 	case oxp_g1_a:
 	case oxp_super_x:
+	case oxp_apex:
 		return write_to_ec(OXP_SENSOR_PWM_REG, val);
 	default:
 		return -EOPNOTSUPP;
@@ -908,6 +945,7 @@ static int oxp_pwm_input_read(long *val)
 	case oxp_mini_amd_pro:
 	case oxp_g1_a:
 	case oxp_super_x:
+	case oxp_apex:
 	default:
 		ret = read_from_ec(OXP_SENSOR_PWM_REG, 1, val);
 		if (ret)
