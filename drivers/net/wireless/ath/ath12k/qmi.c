@@ -1686,6 +1686,115 @@ static const struct qmi_elem_info qmi_wlanfw_aux_uc_info_req_msg_v01_ei[] = {
 	},
 };
 
+static const struct qmi_elem_info
+qmi_wlanfw_qdss_trace_config_download_req_msg_v01_ei[] = {
+	{
+		.data_type	= QMI_OPT_FLAG,
+		.elem_len	= 1,
+		.elem_size	= sizeof(u8),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x10,
+		.offset		= offsetof(struct qmi_wlanfw_qdss_trace_config_download_req_msg_v01,
+					   total_size_valid),
+	},
+	{
+		.data_type	= QMI_UNSIGNED_4_BYTE,
+		.elem_len	= 1,
+		.elem_size	= sizeof(u32),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x10,
+		.offset		= offsetof(struct qmi_wlanfw_qdss_trace_config_download_req_msg_v01,
+					   total_size),
+	},
+	{
+		.data_type	= QMI_OPT_FLAG,
+		.elem_len	= 1,
+		.elem_size	= sizeof(u8),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x11,
+		.offset		= offsetof(struct qmi_wlanfw_qdss_trace_config_download_req_msg_v01,
+					   seg_id_valid),
+	},
+	{
+		.data_type	= QMI_UNSIGNED_4_BYTE,
+		.elem_len	= 1,
+		.elem_size	= sizeof(u32),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x11,
+		.offset		= offsetof(struct qmi_wlanfw_qdss_trace_config_download_req_msg_v01,
+					   seg_id),
+	},
+	{
+		.data_type	= QMI_OPT_FLAG,
+		.elem_len	= 1,
+		.elem_size	= sizeof(u8),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x12,
+		.offset		= offsetof(struct qmi_wlanfw_qdss_trace_config_download_req_msg_v01,
+					   data_valid),
+	},
+	{
+		.data_type	= QMI_DATA_LEN,
+		.elem_len	= 1,
+		.elem_size	= sizeof(u16),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x12,
+		.offset		= offsetof(struct qmi_wlanfw_qdss_trace_config_download_req_msg_v01,
+					   data_len),
+	},
+	{
+		.data_type	= QMI_UNSIGNED_1_BYTE,
+		.elem_len	= QMI_WLANFW_MAX_DATA_SIZE_V01,
+		.elem_size	= sizeof(u8),
+		.array_type	= VAR_LEN_ARRAY,
+		.tlv_type	= 0x12,
+		.offset		= offsetof(struct qmi_wlanfw_qdss_trace_config_download_req_msg_v01,
+					   data),
+	},
+	{
+		.data_type	= QMI_OPT_FLAG,
+		.elem_len	= 1,
+		.elem_size	= sizeof(u8),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x13,
+		.offset		= offsetof(struct qmi_wlanfw_qdss_trace_config_download_req_msg_v01,
+					   end_valid),
+	},
+	{
+		.data_type	= QMI_UNSIGNED_1_BYTE,
+		.elem_len	= 1,
+		.elem_size	= sizeof(u8),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x13,
+		.offset		= offsetof(struct qmi_wlanfw_qdss_trace_config_download_req_msg_v01,
+					   end),
+	},
+	{
+		.data_type	= QMI_EOTI,
+		.array_type	= NO_ARRAY,
+		.tlv_type	= QMI_COMMON_TLV_TYPE,
+	},
+};
+
+static const struct qmi_elem_info
+qmi_wlanfw_qdss_trace_config_download_resp_msg_v01_ei[] = {
+	{
+		.data_type	= QMI_STRUCT,
+		.elem_len	= 1,
+		.elem_size	= sizeof(struct qmi_response_type_v01),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x02,
+		.offset		= offsetof(struct qmi_wlanfw_qdss_trace_config_download_resp_msg_v01,
+					   resp),
+		.ei_array	= qmi_response_type_v01_ei,
+	},
+	{
+		.data_type	= QMI_EOTI,
+		.array_type	= NO_ARRAY,
+		.tlv_type	= QMI_COMMON_TLV_TYPE,
+	},
+};
+
 static const struct qmi_elem_info qmi_wlanfw_aux_uc_info_resp_msg_v01_ei[] = {
 	{
 		.data_type	= QMI_STRUCT,
@@ -3800,6 +3909,110 @@ int ath12k_qmi_event_mem_request(struct ath12k_qmi *qmi)
 	return ret;
 }
 
+/* icnss_wlfw_qdss_dnld_send_sync(); required when CNSS_QDSS_CFG_MISS_V01
+ * is not advertised.
+ */
+static noinline_for_stack
+int ath12k_qmi_wlanfw_qdss_trace_config_download(struct ath12k_base *ab)
+{
+	struct qmi_wlanfw_qdss_trace_config_download_req_msg_v01 *req;
+	struct qmi_wlanfw_qdss_trace_config_download_resp_msg_v01 resp = {};
+	const struct firmware *fw = NULL;
+	unsigned int remaining;
+	char filename[100];
+	struct qmi_txn txn;
+	u32 seg_id = 0;
+	const u8 *temp;
+	int ret;
+
+	ath12k_core_create_firmware_path(ab, ATH12K_QDSS_FILE,
+					 filename, sizeof(filename));
+
+	ret = firmware_request_nowarn(&fw, filename, ab->dev);
+	if (ret) {
+		ath12k_warn(ab, "qmi failed to load QDSS config %s: %d\n",
+			    filename, ret);
+		return ret;
+	}
+
+	req = kzalloc(sizeof(*req), GFP_KERNEL);
+	if (!req) {
+		ret = -ENOMEM;
+		goto out_fw;
+	}
+
+	ath12k_dbg(ab, ATH12K_DBG_QMI, "qmi QDSS config download %s size %zu\n",
+		   filename, fw->size);
+
+	temp = fw->data;
+	remaining = fw->size;
+
+	while (remaining) {
+		req->total_size_valid = 1;
+		req->total_size = remaining;
+		req->seg_id_valid = 1;
+		req->seg_id = seg_id;
+		req->data_valid = 1;
+		req->end_valid = 1;
+
+		if (remaining > QMI_WLANFW_MAX_DATA_SIZE_V01) {
+			req->data_len = QMI_WLANFW_MAX_DATA_SIZE_V01;
+			req->end = 0;
+		} else {
+			req->data_len = remaining;
+			req->end = 1;
+		}
+
+		memcpy(req->data, temp, req->data_len);
+
+		ret = qmi_txn_init(&ab->qmi.handle, &txn,
+				   qmi_wlanfw_qdss_trace_config_download_resp_msg_v01_ei,
+				   &resp);
+		if (ret < 0)
+			goto out;
+
+		ret = qmi_send_request(&ab->qmi.handle, NULL, &txn,
+				       QMI_WLANFW_QDSS_TRACE_CONFIG_DOWNLOAD_REQ_V01,
+				       QMI_WLANFW_QDSS_TRACE_CONFIG_DOWNLOAD_REQ_MSG_V01_MAX_LEN,
+				       qmi_wlanfw_qdss_trace_config_download_req_msg_v01_ei,
+				       req);
+		if (ret < 0) {
+			qmi_txn_cancel(&txn);
+			ath12k_warn(ab, "qmi failed to send QDSS config seg %u: %d\n",
+				    seg_id, ret);
+			goto out;
+		}
+
+		ret = qmi_txn_wait(&txn, msecs_to_jiffies(ATH12K_QMI_WLANFW_TIMEOUT_MS));
+		if (ret < 0) {
+			ath12k_warn(ab, "qmi failed QDSS config seg %u: %d\n",
+				    seg_id, ret);
+			goto out;
+		}
+
+		if (resp.resp.result != QMI_RESULT_SUCCESS_V01) {
+			ath12k_warn(ab, "qmi QDSS config seg %u rejected, result %u err %u\n",
+				    seg_id, resp.resp.result, resp.resp.error);
+			ret = -EINVAL;
+			goto out;
+		}
+
+		remaining -= req->data_len;
+		temp += req->data_len;
+		seg_id++;
+	}
+
+	ath12k_dbg(ab, ATH12K_DBG_QMI, "qmi QDSS config download completed\n");
+	ret = 0;
+
+out:
+	kfree(req);
+out_fw:
+	release_firmware(fw);
+
+	return ret;
+}
+
 /* clang stack usage explodes if this is inlined */
 static noinline_for_stack
 int ath12k_qmi_event_load_bdf(struct ath12k_qmi *qmi)
@@ -3842,6 +4055,14 @@ int ath12k_qmi_event_load_bdf(struct ath12k_qmi *qmi)
 		ret = ath12k_qmi_wlanfw_aux_uc_info_send(ab);
 		if (ret < 0) {
 			ath12k_warn(ab, "qmi failed to send aux_uc info req: %d\n", ret);
+			return ret;
+		}
+	}
+
+	if (!(hw_params->qmi_cnss_feature_bitmap & BIT(CNSS_QDSS_CFG_MISS_V01))) {
+		ret = ath12k_qmi_wlanfw_qdss_trace_config_download(ab);
+		if (ret < 0) {
+			ath12k_warn(ab, "qmi failed to send QDSS config: %d\n", ret);
 			return ret;
 		}
 	}
