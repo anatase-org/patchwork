@@ -174,6 +174,11 @@ void ath12k_pci_stop(struct ath12k_base *ab);
 int ath12k_pci_start(struct ath12k_base *ab);
 int ath12k_pci_power_up(struct ath12k_base *ab);
 void ath12k_pci_power_down(struct ath12k_base *ab, bool is_suspend);
+
+/* Shared CE/MSI IRQ setup, reused by the WCN7750 AHB (WPSS) transport. */
+int ath12k_pci_config_irq(struct ath12k_base *ab);
+void ath12k_pci_free_irq(struct ath12k_base *ab);
+
 int ath12k_pci_register_driver(const enum ath12k_device_family device_id,
 			       struct ath12k_pci_driver *driver);
 void ath12k_pci_unregister_driver(const enum ath12k_device_family device_id);
