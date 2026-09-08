@@ -11,6 +11,7 @@
 #include <linux/firmware.h>
 #include <linux/of.h>
 #include <linux/of_graph.h>
+#include <linux/delay.h>
 #include "ahb.h"
 #include "core.h"
 #include "dp_tx.h"
@@ -794,6 +795,36 @@ int ath12k_core_check_smbios(struct ath12k_base *ab)
 	return 0;
 }
 
+/* QMI server go-away/come-back around the power cycle */
+#define ATH12K_CAL_RESTART_SETTLE_MS	100
+
+/* The host restarts the firmware after cold boot calibration. */
+static void ath12k_core_cal_restart_work(struct work_struct *work)
+{
+	struct ath12k_base *ab = container_of(work, struct ath12k_base,
+					      cal_restart_work);
+	int ret;
+
+	ath12k_dbg(ab, ATH12K_DBG_BOOT,
+		   "restarting firmware after cold boot calibration\n");
+
+	ath12k_hif_power_down(ab, false);
+
+	msleep(ATH12K_CAL_RESTART_SETTLE_MS);
+
+	ret = ath12k_hif_power_up(ab);
+	if (ret)
+		ath12k_err(ab, "failed to power up after calibration: %d\n", ret);
+}
+
+/* Not to be left in flight across teardown. */
+void ath12k_core_stop_cal_restart(struct ath12k_base *ab)
+{
+	ab->cal_restart_pending = false;
+	cancel_work_sync(&ab->cal_restart_work);
+}
+EXPORT_SYMBOL(ath12k_core_stop_cal_restart);
+
 static int ath12k_core_soc_create(struct ath12k_base *ab)
 {
 	int ret;
@@ -808,6 +839,8 @@ static int ath12k_core_soc_create(struct ath12k_base *ab)
 		ath12k_err(ab, "failed to initialize qmi :%d\n", ret);
 		return ret;
 	}
+
+	INIT_WORK(&ab->cal_restart_work, ath12k_core_cal_restart_work);
 
 	ath12k_debugfs_soc_create(ab);
 

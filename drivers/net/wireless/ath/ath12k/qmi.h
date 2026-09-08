@@ -30,6 +30,7 @@
 #define QMI_WLFW_REQUEST_MEM_IND_V01		0x0035
 #define QMI_WLFW_FW_MEM_READY_IND_V01		0x0037
 #define QMI_WLFW_FW_READY_IND_V01		0x0038
+#define QMI_WLFW_CAL_DONE_IND_V01		0x003E
 
 #define QMI_WLANFW_MAX_DATA_SIZE_V01		6144
 
@@ -657,6 +658,11 @@ enum ath12k_qmi_firmware_mode {
 
 	/* firmware offline; values 2-3 reserved by firmware ABI */
 	ATH12K_QMI_FIRMWARE_MODE_OFF = 4,
+
+	/* QMI_WLFW_CALIBRATION_V01: raises CAL_DONE, then the host restarts the
+	 * firmware
+	 */
+	ATH12K_QMI_FIRMWARE_MODE_CALIBRATION = 7,
 };
 
 static inline void ath12k_qmi_set_event_block(struct ath12k_qmi *qmi, bool block)

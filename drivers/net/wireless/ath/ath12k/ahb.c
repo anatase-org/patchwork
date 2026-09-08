@@ -1278,6 +1278,7 @@ static void ath12k_ahb_remove_prepare(struct ath12k_base *ab)
 	set_bit(ATH12K_FLAG_UNREGISTERING, &ab->dev_flags);
 	cancel_work_sync(&ab->restart_work);
 	cancel_work_sync(&ab->qmi.event_work);
+	ath12k_core_stop_cal_restart(ab);
 }
 
 static void ath12k_ahb_free_resources(struct ath12k_base *ab)
@@ -1301,6 +1302,8 @@ static void ath12k_ahb_remove(struct platform_device *pdev)
 	struct ath12k_base *ab = platform_get_drvdata(pdev);
 
 	if (test_bit(ATH12K_FLAG_QMI_FAIL, &ab->dev_flags)) {
+		ath12k_core_stop_cal_restart(ab);
+
 		ath12k_ahb_power_down(ab, false);
 		goto qmi_fail;
 	}
