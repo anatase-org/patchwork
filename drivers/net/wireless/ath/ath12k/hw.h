@@ -197,6 +197,9 @@ struct ath12k_hw_params {
 	bool current_cc_support:1;
 	bool supports_cong_ctrl_max_msdus:1;
 
+	/* 0x8fc on PCIe parts, 0x504 on WPSS-hosted WCN parts */
+	u32 hal_shadow_base_addr;
+
 	u32 num_tcl_banks;
 	u32 max_tx_ring;
 

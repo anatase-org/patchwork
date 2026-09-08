@@ -494,6 +494,7 @@ static const struct ath12k_hw_params ath12k_wifi7_hw_params[] = {
 		.tcl_ring_retry = false,
 		.reoq_lut_support = false,
 		.supports_shadow_regs = true,
+		.hal_shadow_base_addr = HAL_SHADOW_BASE_ADDR,
 
 		.num_tcl_banks = 7,
 		.max_tx_ring = 3,
@@ -761,6 +762,7 @@ static const struct ath12k_hw_params ath12k_wifi7_hw_params[] = {
 		.tcl_ring_retry = false,
 		.reoq_lut_support = false,
 		.supports_shadow_regs = true,
+		.hal_shadow_base_addr = HAL_SHADOW_BASE_ADDR,
 
 		.num_tcl_banks = 7,
 		.max_tx_ring = 3,
