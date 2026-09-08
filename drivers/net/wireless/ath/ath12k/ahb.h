@@ -7,6 +7,10 @@
 #define ATH12K_AHB_H
 
 #include <linux/clk.h>
+#include <linux/gpio/consumer.h>
+#include <linux/interconnect.h>
+#include <linux/regulator/consumer.h>
+#include <linux/remoteproc.h>
 #include <linux/remoteproc/qcom_rproc.h>
 #include <linux/platform_device.h>
 #include "core.h"
@@ -45,12 +49,18 @@ struct ath12k_ahb_userpd_map {
 struct ath12k_ahb_desc {
 	enum ath12k_hw_rev hw_rev;
 	bool auth_enabled;
+	/* WCN7750: MSI + WLAN Q6 on the WPSS remoteproc, no UserPD */
+	bool hybrid_bus;
 	const struct ath12k_hif_ops *ops;
 };
 
+/* icnss_smp2p_msg_id; WCN7750 uses the EP pair on wlan_ep_power_save */
 enum ath12k_ahb_smp2p_msg_id {
+	ATH12K_AHB_RESET_MSG = 0,
 	ATH12K_AHB_POWER_SAVE_ENTER = 1,
 	ATH12K_AHB_POWER_SAVE_EXIT,
+	ATH12K_AHB_PCI_EP_POWER_SAVE_ENTER = 6,
+	ATH12K_AHB_PCI_EP_POWER_SAVE_EXIT,
 };
 
 enum ath12k_ahb_userpd_irq {
@@ -62,6 +72,7 @@ enum ath12k_ahb_userpd_irq {
 
 struct ath12k_base;
 extern const struct ath12k_hif_ops ath12k_ahb_hif_ops;
+extern const struct ath12k_hif_ops ath12k_ahb_hif_ops_wcn7750;
 
 struct ath12k_ahb_device_family_ops {
 	int (*probe)(struct platform_device *pdev);
@@ -95,6 +106,25 @@ struct ath12k_ahb {
 	const struct ath12k_ahb_device_family_ops *device_family_ops;
 	bool scm_auth_enabled;
 	struct ath12k_ahb_rproc_info *rproc_info;
+
+	/* WCN7750 only */
+	struct rproc *wpss_rproc;
+	/* powers the die around the Q6, including remoteproc's own restarts */
+	struct rproc_subdev wpss_subdev;
+	bool wpss_subdev_added;
+	dma_addr_t msi_addr_iova;
+	u32 msi_addr_lo;
+	u32 msi_addr_hi;
+	struct regulator_bulk_data *vregs;
+	int num_vregs;
+	struct gpio_desc *wlan_en_gpio;
+	struct icc_path *icc_mem;
+	struct qcom_smem_state *ep_power_save_state;
+	u16 smp2p_seq;
+
+	/* dynamic register window */
+	spinlock_t window_lock;
+	u32 register_window;
 };
 
 struct ath12k_ahb_driver {
