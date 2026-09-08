@@ -942,6 +942,8 @@ enum ath12k_device_family {
 };
 
 struct ath12k_msi_config;
+struct ath12k_pci_reg_base;
+
 /* Master structure to hold the hw data which may be used in core module */
 struct ath12k_base {
 	enum ath12k_hw_rev hw_rev;
@@ -1025,6 +1027,9 @@ struct ath12k_base {
 	u32 msi_ep_base_data;
 	bool multi_msi_vectors;
 	unsigned long msi_irq_flags;
+
+	/* UMAC/CE window bases */
+	const struct ath12k_pci_reg_base *reg_base;
 
 	struct napi_struct *napi;
 	struct ath12k_wmi_target_cap_arg target_caps;

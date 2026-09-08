@@ -105,6 +105,10 @@ struct ath12k_pci_device_family_ops {
 	void (*arch_deinit)(struct ath12k_base *ab);
 };
 
+/* shared with the WCN7750 AHB transport */
+#define ATH12K_PCI_WINDOW_START		0x80000
+#define ATH12K_PCI_WINDOW_RANGE_MASK	GENMASK(18, 0)
+
 struct ath12k_pci_reg_base {
 	u32 umac_base;
 	u32 ce_reg_base;
