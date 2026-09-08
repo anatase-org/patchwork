@@ -1666,6 +1666,52 @@ static void ath12k_core_post_reconfigure_recovery(struct ath12k_base *ab)
 	complete(&ab->driver_recovery);
 }
 
+/* Crash teardown for a firmware restarted outside ath12k (WPSS remoteproc). */
+void ath12k_core_firmware_crashed(struct ath12k_base *ab)
+{
+	/* wake a bring-up waiting for calibration; cal_done_seen says it failed */
+	complete(&ab->cal_done);
+
+	if (!test_bit(ATH12K_FLAG_QMI_FW_READY_COMPLETE, &ab->dev_flags)) {
+		ath12k_warn(ab, "ignore firmware crash, dev flags 0x%lx\n",
+			    ab->dev_flags);
+		return;
+	}
+
+	/* fold a second crash into the restart under way */
+	if (test_bit(ATH12K_FLAG_CRASH_IN_FLIGHT, &ab->dev_flags)) {
+		if (time_before(jiffies, ab->crash_in_flight_at +
+					 ATH12K_CRASH_IN_FLIGHT_TIMEOUT)) {
+			ath12k_warn(ab, "firmware crashed again %ums into a restart, folding into it\n",
+				    jiffies_to_msecs(jiffies - ab->crash_in_flight_at));
+			return;
+		}
+
+		ath12k_warn(ab, "previous restart stuck for %ums, tearing down again\n",
+			    jiffies_to_msecs(jiffies - ab->crash_in_flight_at));
+	}
+
+	set_bit(ATH12K_FLAG_CRASH_IN_FLIGHT, &ab->dev_flags);
+	ab->crash_in_flight_at = jiffies;
+
+	ath12k_warn(ab, "firmware crashed, tearing down for restart\n");
+
+	/* is_reset gates CRASH_FLUSH and the ieee80211_restart_hw() hand-back */
+	ab->is_reset = true;
+	atomic_set(&ab->recovery_count, 0);
+	atomic_inc(&ab->reset_count);
+
+	ath12k_core_pre_reconfigure_recovery(ab);
+	ath12k_core_post_reconfigure_recovery(ab);
+
+	ath12k_hif_irq_disable(ab);
+	ath12k_hif_ce_irq_disable(ab);
+
+	/* prepare for the QMI handshake that follows the restart */
+	ab->qmi.num_radios = U8_MAX;
+}
+EXPORT_SYMBOL(ath12k_core_firmware_crashed);
+
 static void ath12k_core_restart(struct work_struct *work)
 {
 	struct ath12k_base *ab = container_of(work, struct ath12k_base, restart_work);
@@ -1676,6 +1722,7 @@ static void ath12k_core_restart(struct work_struct *work)
 	ret = ath12k_core_reconfigure_on_crash(ab);
 	if (ret) {
 		ath12k_err(ab, "failed to reconfigure driver on crash recovery\n");
+		clear_bit(ATH12K_FLAG_CRASH_IN_FLIGHT, &ab->dev_flags);
 		return;
 	}
 
@@ -1704,6 +1751,7 @@ static void ath12k_core_restart(struct work_struct *work)
 	}
 
 exit_restart:
+	clear_bit(ATH12K_FLAG_CRASH_IN_FLIGHT, &ab->dev_flags);
 	complete(&ab->restart_completed);
 }
 
