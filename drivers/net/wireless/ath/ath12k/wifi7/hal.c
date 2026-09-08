@@ -57,6 +57,14 @@ static const struct ath12k_hw_version_map ath12k_wifi7_hw_ver_map[] = {
 		.hal_params = &ath12k_hw_hal_params_ipq5332,
 		.hw_regs = &ipq5424_regs,
 	},
+	/* same HAL as qcc2072 */
+	[ATH12K_HW_WCN7750_HW10] = {
+		.hal_ops = &hal_qcc2072_ops,
+		.hal_desc_sz = sizeof(struct hal_rx_desc_qcc2072),
+		.tcl_to_wbm_rbm_map = ath12k_hal_tcl_to_wbm_rbm_map_wcn7850,
+		.hal_params = &ath12k_hw_hal_params_wcn7850,
+		.hw_regs = &qcc2072_regs,
+	},
 };
 
 int ath12k_wifi7_hal_init(struct ath12k_base *ab)
@@ -64,6 +72,14 @@ int ath12k_wifi7_hal_init(struct ath12k_base *ab)
 	struct ath12k_hal *hal = &ab->hal;
 
 	memset(hal, 0, sizeof(*hal));
+
+	/* an unknown hw_rev would index past the table */
+	if (ab->hw_rev >= ARRAY_SIZE(ath12k_wifi7_hw_ver_map) ||
+	    !ath12k_wifi7_hw_ver_map[ab->hw_rev].hal_ops) {
+		ath12k_err(ab, "no Wi-Fi 7 HAL version map for hw_rev %d\n",
+			   ab->hw_rev);
+		return -EOPNOTSUPP;
+	}
 
 	hal->ops = ath12k_wifi7_hw_ver_map[ab->hw_rev].hal_ops;
 	hal->hal_desc_sz = ath12k_wifi7_hw_ver_map[ab->hw_rev].hal_desc_sz;
