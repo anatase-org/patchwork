@@ -155,9 +155,11 @@ struct ath12k_qmi {
 	u8 dynamic_ddr_support;
 };
 
-#define QMI_WLANFW_HOST_CAP_REQ_MSG_V01_MAX_LEN		265
+/* 265 + ddr_range (51) + gpio_info (83) */
+#define QMI_WLANFW_HOST_CAP_REQ_MSG_V01_MAX_LEN		403
 #define QMI_WLANFW_HOST_CAP_REQ_V01			0x0034
 #define QMI_WLFW_MAX_NUM_GPIO_V01			32
+#define QMI_WLFW_MAX_NUM_GPIO_INFO_V01			20
 #define QMI_WLANFW_MAX_PLATFORM_NAME_LEN_V01		64
 #define QMI_WLANFW_MAX_HOST_DDR_RANGE_SIZE_V01		3
 
@@ -255,6 +257,9 @@ struct qmi_wlanfw_host_cap_req_msg_v01 {
 	u64 feature_list;
 	u8 dynamic_mem_support_valid;
 	u8 dynamic_mem_support;
+	u8 gpio_info_valid;
+	u32 gpio_info_len;
+	u32 gpio_info[QMI_WLFW_MAX_NUM_GPIO_INFO_V01];
 };
 
 struct qmi_wlanfw_host_cap_resp_msg_v01 {

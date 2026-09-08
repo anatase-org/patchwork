@@ -1037,6 +1037,12 @@ struct ath12k_base {
 	/* keeps ab->mem stable across recovery */
 	u64 hybrid_bar_pa;
 
+	/* host_cap ddr_range: IOVA window and MSA carveout */
+	u64 host_ddr_iova_start;
+	u64 host_ddr_iova_size;
+	u64 host_ddr_msa_start;
+	u64 host_ddr_msa_size;
+
 	struct napi_struct *napi;
 	struct ath12k_wmi_target_cap_arg target_caps;
 	u32 ext_service_bitmap[WMI_SERVICE_EXT_BM_SIZE];
