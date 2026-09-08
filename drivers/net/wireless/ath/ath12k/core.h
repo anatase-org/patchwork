@@ -1086,6 +1086,9 @@ struct ath12k_base {
 	atomic_t fail_cont_count;
 	unsigned long reset_fail_timeout;
 
+	/* bumped when the QMI server goes away */
+	atomic_t fw_generation;
+
 	struct completion cal_done;
 	bool cal_done_seen;
 
