@@ -570,6 +570,9 @@ struct qmi_wlanfw_qdss_trace_config_download_resp_msg_v01 {
 #define QMI_WLANFW_MAX_NUM_SHADOW_REG_V01		24
 #define QMI_WLANFW_MAX_NUM_SHADOW_REG_V3_V01		60
 
+/* the firmware reserves 2 of its 40 shadow registers */
+#define ATH12K_QMI_MAX_USABLE_SHADOW_REG_V3		38
+
 struct qmi_wlanfw_wlan_mode_req_msg_v01 {
 	u32 mode;
 	u8 hw_debug_valid;
