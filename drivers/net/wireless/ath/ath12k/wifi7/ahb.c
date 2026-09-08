@@ -26,6 +26,12 @@ static const struct ath12k_ahb_desc ath12k_wifi7_ahb_desc[] = {
 		.auth_enabled = false,
 		.ops = &ath12k_ahb_hif_ops,
 	},
+	[ATH12K_HW_WCN7750_HW10] = {
+		.hw_rev = ATH12K_HW_WCN7750_HW10,
+		.auth_enabled = false,
+		.hybrid_bus = true,
+		.ops = &ath12k_ahb_hif_ops_wcn7750,
+	},
 };
 
 static const struct of_device_id ath12k_wifi7_ahb_of_match[] = {
@@ -34,6 +40,9 @@ static const struct of_device_id ath12k_wifi7_ahb_of_match[] = {
 	},
 	{ .compatible = "qcom,ipq5424-wifi",
 	  .data = (void *)&ath12k_wifi7_ahb_desc[ATH12K_HW_IPQ5424_HW10],
+	},
+	{ .compatible = "qcom,wcn7750-wifi",
+	  .data = (void *)&ath12k_wifi7_ahb_desc[ATH12K_HW_WCN7750_HW10],
 	},
 	{ }
 };
@@ -57,9 +66,16 @@ static int ath12k_wifi7_ahb_probe(struct platform_device *pdev)
 	ab->hw_rev = desc->hw_rev;
 	ab->hif.ops = desc->ops;
 	ab_ahb->scm_auth_enabled = desc->auth_enabled;
-	ab_ahb->userpd_id = ATH12K_AHB_USERPD_ID_0;
-	if (!ab_ahb->userpd_id)
-		return -EOPNOTSUPP;
+	ab->hybrid_bus = desc->hybrid_bus;
+
+	if (desc->hybrid_bus) {
+		/* same UMAC/CE windows as the PCI parts */
+		ab->reg_base = &ath12k_wifi7_reg_base;
+	}
+
+	/* no UserPD on WCN7750 */
+	if (!ab->hybrid_bus)
+		ab_ahb->userpd_id = ATH12K_AHB_USERPD_ID_0;
 
 	ret = ath12k_wifi7_hw_init(ab);
 	if (ret) {
