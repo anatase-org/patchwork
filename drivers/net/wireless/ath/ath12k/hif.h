@@ -31,7 +31,16 @@ struct ath12k_hif_ops {
 	void (*ce_irq_disable)(struct ath12k_base *ab);
 	void (*get_ce_msi_idx)(struct ath12k_base *ab, u32 ce_id, u32 *msi_idx);
 	void (*coredump_download)(struct ath12k_base *ab);
+
+	/* Optional. Re-arm static windows once per bring-up (the target resets them). */
+	void (*cfg_static_window)(struct ath12k_base *ab);
 };
+
+static inline void ath12k_hif_cfg_static_window(struct ath12k_base *ab)
+{
+	if (ab->hif.ops->cfg_static_window)
+		ab->hif.ops->cfg_static_window(ab);
+}
 
 static inline int ath12k_hif_map_service_to_pipe(struct ath12k_base *ab, u16 service_id,
 						 u8 *ul_pipe, u8 *dl_pipe)
