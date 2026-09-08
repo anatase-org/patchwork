@@ -999,7 +999,10 @@ int ath12k_pci_map_service_to_pipe(struct ath12k_base *ab, u16 service_id,
 		}
 	}
 
-	if (WARN_ON(!ul_set || !dl_set))
+	/* receive-only service (WMI_CONTROL_DIAG) */
+	if (dl_set && !ul_set)
+		*ul_pipe = *dl_pipe;
+	else if (WARN_ON(!ul_set || !dl_set))
 		return -ENOENT;
 
 	return 0;
