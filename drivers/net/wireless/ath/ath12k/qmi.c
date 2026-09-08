@@ -4315,6 +4315,44 @@ int ath12k_qmi_event_load_bdf(struct ath12k_qmi *qmi)
 		}
 	}
 
+	/* After target cap/BDF/M3/QDSS, before wlan_ini/wlan_cfg
+	 * (QMI_ERR_INCOMPATIBLE_STATE_V01). Once per driver load.
+	 */
+	if (ab->hw_params->supports_coldboot_cal && !ab->cal_done_seen) {
+		unsigned long left;
+
+		ath12k_dbg(ab, ATH12K_DBG_QMI, "qmi requesting cold boot calibration\n");
+		reinit_completion(&ab->cal_done);
+
+		ret = ath12k_qmi_wlanfw_mode_send(ab,
+						  ATH12K_QMI_FIRMWARE_MODE_CALIBRATION);
+		if (ret < 0) {
+			ath12k_warn(ab, "qmi failed to request calibration: %d\n",
+				    ret);
+			return 0;
+		}
+
+		left = wait_for_completion_timeout(&ab->cal_done,
+						   ATH12K_COLDBOOT_CAL_TIMEOUT);
+
+		/* target still in calibration mode; let recovery bring it up fresh */
+		if (!left || !ab->cal_done_seen) {
+			ath12k_warn(ab, "qmi cold boot calibration %s\n",
+				    left ? "aborted" : "timed out");
+			return -ECANCELED;
+		}
+
+		ath12k_dbg(ab, ATH12K_DBG_QMI,
+			   "qmi cold boot calibration finished after %ums, waiting for firmware restart\n",
+			    jiffies_to_msecs(ATH12K_COLDBOOT_CAL_TIMEOUT - left));
+
+		/* The firmware restarts itself; FW_READY from this instance is not a
+		 * bring-up (ath11k).
+		 */
+		ab->cal_restart_pending = true;
+		return 0;
+	}
+
 	return ret;
 }
 
@@ -4387,7 +4425,27 @@ static void ath12k_qmi_msg_fw_ready_cb(struct qmi_handle *qmi_hdl,
 	ath12k_qmi_driver_event_post(qmi, ATH12K_QMI_EVENT_FW_READY, NULL);
 }
 
+static void ath12k_qmi_msg_cal_done_cb(struct qmi_handle *qmi_hdl,
+				       struct sockaddr_qrtr *sq,
+				       struct qmi_txn *txn,
+				       const void *data)
+{
+	struct ath12k_qmi *qmi = container_of(qmi_hdl, struct ath12k_qmi, handle);
+	struct ath12k_base *ab = qmi->ab;
+
+	ath12k_dbg(ab, ATH12K_DBG_QMI, "qmi cold boot calibration done\n");
+	ab->cal_done_seen = true;
+	complete(&ab->cal_done);
+}
+
 static const struct qmi_msg_handler ath12k_qmi_msg_handlers[] = {
+	{
+		.type = QMI_INDICATION,
+		.msg_id = QMI_WLFW_CAL_DONE_IND_V01,
+		.ei = qmi_wlanfw_fw_ready_ind_msg_v01_ei,
+		.decoded_size = sizeof(struct qmi_wlanfw_fw_ready_ind_msg_v01),
+		.fn = ath12k_qmi_msg_cal_done_cb,
+	},
 	{
 		.type = QMI_INDICATION,
 		.msg_id = QMI_WLFW_REQUEST_MEM_IND_V01,
@@ -4517,6 +4575,15 @@ static void ath12k_qmi_driver_event_work(struct work_struct *work)
 			break;
 		case ATH12K_QMI_EVENT_FW_READY:
 			clear_bit(ATH12K_FLAG_QMI_FAIL, &ab->dev_flags);
+
+			if (ab->cal_restart_pending) {
+				ath12k_dbg(ab, ATH12K_DBG_QMI,
+					   "qmi fw ready from the calibration instance, restarting\n");
+				ab->cal_restart_pending = false;
+				queue_work(ab->workqueue, &ab->cal_restart_work);
+				break;
+			}
+
 			if (test_bit(ATH12K_FLAG_QMI_FW_READY_COMPLETE, &ab->dev_flags)) {
 				if (ab->is_reset)
 					ath12k_hal_dump_srng_stats(ab);
@@ -4554,6 +4621,8 @@ skip:
 int ath12k_qmi_init_service(struct ath12k_base *ab)
 {
 	int ret;
+
+	init_completion(&ab->cal_done);
 
 	memset(&ab->qmi.target, 0, sizeof(struct target_info));
 	memset(&ab->qmi.target_mem, 0, sizeof(struct target_mem_chunk));

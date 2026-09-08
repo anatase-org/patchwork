@@ -60,6 +60,8 @@
 
 #define ATH12K_MON_TIMER_INTERVAL  10
 #define ATH12K_RESET_TIMEOUT_HZ			(20 * HZ)
+/* Downstream allows ICNSS_CAL_TIMEOUT for a cold boot calibration pass. */
+#define ATH12K_COLDBOOT_CAL_TIMEOUT		(40 * HZ)
 #define ATH12K_RESET_MAX_FAIL_COUNT_FIRST	3
 #define ATH12K_RESET_MAX_FAIL_COUNT_FINAL	5
 #define ATH12K_RESET_FAIL_TIMEOUT_HZ		(20 * HZ)
@@ -1083,6 +1085,13 @@ struct ath12k_base {
 	/* continuous recovery fail count */
 	atomic_t fail_cont_count;
 	unsigned long reset_fail_timeout;
+
+	struct completion cal_done;
+	bool cal_done_seen;
+
+	/* FW_READY from the calibration instance triggers a restart instead */
+	bool cal_restart_pending;
+	struct work_struct cal_restart_work;
 	struct work_struct update_11d_work;
 	u8 new_alpha2[2];
 	struct {
@@ -1278,6 +1287,7 @@ void ath12k_core_hw_group_cleanup(struct ath12k_hw_group *ag);
 int ath12k_core_pre_init(struct ath12k_base *ab);
 int ath12k_core_init(struct ath12k_base *ath12k);
 void ath12k_core_deinit(struct ath12k_base *ath12k);
+void ath12k_core_stop_cal_restart(struct ath12k_base *ab);
 struct ath12k_base *ath12k_core_alloc(struct device *dev, size_t priv_size,
 				      enum ath12k_bus bus);
 void ath12k_core_free(struct ath12k_base *ath12k);

@@ -195,6 +195,7 @@ struct ath12k_hw_params {
 	bool tcl_ring_retry:1;
 	bool reoq_lut_support:1;
 	bool supports_shadow_regs:1;
+	bool supports_coldboot_cal:1;
 	bool supports_aspm:1;
 	bool current_cc_support:1;
 	bool supports_cong_ctrl_max_msdus:1;
