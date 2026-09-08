@@ -26,8 +26,8 @@
 
 #define WINDOW_ENABLE_BIT		0x40000000
 #define WINDOW_VALUE_MASK		GENMASK(24, 19)
-#define WINDOW_START			0x80000
-#define WINDOW_RANGE_MASK		GENMASK(18, 0)
+#define WINDOW_START			ATH12K_PCI_WINDOW_START
+#define WINDOW_RANGE_MASK		ATH12K_PCI_WINDOW_RANGE_MASK
 #define WINDOW_STATIC_MASK		GENMASK(31, 6)
 
 /* BAR0 + 4k is always accessible, and no
@@ -1571,6 +1571,7 @@ static int ath12k_pci_probe(struct pci_dev *pdev,
 
 	ab_pci->device_family_ops = &ath12k_pci_family_drivers[device_id]->ops;
 	ab_pci->reg_base = ath12k_pci_family_drivers[device_id]->reg_base;
+	ab->reg_base = ab_pci->reg_base;
 
 	/* Call device specific probe. This is the callback that can
 	 * be used to override any ops in future
