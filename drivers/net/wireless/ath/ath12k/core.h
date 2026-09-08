@@ -941,6 +941,7 @@ enum ath12k_device_family {
 	ATH12K_DEVICE_FAMILY_MAX,
 };
 
+struct ath12k_msi_config;
 /* Master structure to hold the hw data which may be used in core module */
 struct ath12k_base {
 	enum ath12k_hw_rev hw_rev;
@@ -1018,6 +1019,13 @@ struct ath12k_base {
 	u32 wlan_init_status;
 	int irq_num[ATH12K_IRQ_NUM_MAX];
 	struct ath12k_ext_irq_grp ext_irq_grp[ATH12K_EXT_IRQ_GRP_NUM_MAX];
+
+	/* MSI state shared by the PCI and WCN7750 AHB transports */
+	const struct ath12k_msi_config *msi_config;
+	u32 msi_ep_base_data;
+	bool multi_msi_vectors;
+	unsigned long msi_irq_flags;
+
 	struct napi_struct *napi;
 	struct ath12k_wmi_target_cap_arg target_caps;
 	u32 ext_service_bitmap[WMI_SERVICE_EXT_BM_SIZE];
