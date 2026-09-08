@@ -60,6 +60,8 @@
 
 #define ATH12K_MON_TIMER_INTERVAL  10
 #define ATH12K_RESET_TIMEOUT_HZ			(20 * HZ)
+/* after this a further crash tears down again instead of folding */
+#define ATH12K_CRASH_IN_FLIGHT_TIMEOUT		(10 * HZ)
 /* Downstream allows ICNSS_CAL_TIMEOUT for a cold boot calibration pass. */
 #define ATH12K_COLDBOOT_CAL_TIMEOUT		(40 * HZ)
 #define ATH12K_RESET_MAX_FAIL_COUNT_FIRST	3
@@ -275,6 +277,7 @@ enum ath12k_dev_flags {
 	ATH12K_FLAG_QMI_FW_READY_COMPLETE,
 	ATH12K_FLAG_FTM_SEGMENTED,
 	ATH12K_FLAG_FIXED_MEM_REGION,
+	ATH12K_FLAG_CRASH_IN_FLIGHT,
 };
 
 struct ath12k_tx_conf {
@@ -1086,6 +1089,8 @@ struct ath12k_base {
 	atomic_t fail_cont_count;
 	unsigned long reset_fail_timeout;
 
+	unsigned long crash_in_flight_at;
+
 	/* bumped when the QMI server goes away */
 	atomic_t fw_generation;
 
@@ -1304,6 +1309,7 @@ int ath12k_core_fetch_regdb(struct ath12k_base *ab, struct ath12k_board_data *bd
 int ath12k_core_check_dt(struct ath12k_base *ath12k);
 int ath12k_core_check_smbios(struct ath12k_base *ab);
 void ath12k_core_halt(struct ath12k *ar);
+void ath12k_core_firmware_crashed(struct ath12k_base *ab);
 int ath12k_core_resume_early(struct ath12k_base *ab);
 int ath12k_core_resume(struct ath12k_base *ab);
 int ath12k_core_suspend(struct ath12k_base *ab);
