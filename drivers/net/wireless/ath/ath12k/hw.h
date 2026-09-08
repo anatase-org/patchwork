@@ -97,6 +97,8 @@ struct ieee80211_rx_status;
 #define ATH12K_AMSS_FILE		"amss.bin"
 #define ATH12K_M3_FILE			"m3.bin"
 #define ATH12K_AUX_UC_FILE		"aux_ucode.bin"
+/* qdss_trace_config_{perf,debug}_v1.cfg downstream */
+#define ATH12K_QDSS_FILE		"qdss.cfg"
 #define ATH12K_REGDB_FILE_NAME		"regdb.bin"
 
 #define ATH12K_PCIE_MAX_PAYLOAD_SIZE	128
