@@ -65,6 +65,32 @@ static const struct qmi_elem_info wlfw_host_mlo_chip_info_s_v01_ei[] = {
 	},
 };
 
+static const struct qmi_elem_info qmi_wlanfw_host_ddr_range_ei[] = {
+	{
+		.data_type	= QMI_UNSIGNED_8_BYTE,
+		.elem_len	= 1,
+		.elem_size	= sizeof(u64),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0,
+		.offset		= offsetof(struct qmi_wlanfw_host_ddr_range,
+					   start),
+	},
+	{
+		.data_type	= QMI_UNSIGNED_8_BYTE,
+		.elem_len	= 1,
+		.elem_size	= sizeof(u64),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0,
+		.offset		= offsetof(struct qmi_wlanfw_host_ddr_range,
+					   size),
+	},
+	{
+		.data_type	= QMI_EOTI,
+		.array_type	= NO_ARRAY,
+		.tlv_type	= QMI_COMMON_TLV_TYPE,
+	},
+};
+
 static const struct qmi_elem_info qmi_wlanfw_host_cap_req_msg_v01_ei[] = {
 	{
 		.data_type	= QMI_OPT_FLAG,
@@ -362,6 +388,7 @@ static const struct qmi_elem_info qmi_wlanfw_host_cap_req_msg_v01_ei[] = {
 		.tlv_type	= 0x1F,
 		.offset		= offsetof(struct qmi_wlanfw_host_cap_req_msg_v01,
 					   ddr_range),
+		.ei_array	= qmi_wlanfw_host_ddr_range_ei,
 	},
 	{
 		.data_type	= QMI_OPT_FLAG,
@@ -507,6 +534,33 @@ static const struct qmi_elem_info qmi_wlanfw_host_cap_req_msg_v01_ei[] = {
 		.tlv_type	= 0x27,
 		.offset		= offsetof(struct qmi_wlanfw_host_cap_req_msg_v01,
 					   feature_list),
+	},
+	{
+		.data_type	= QMI_OPT_FLAG,
+		.elem_len	= 1,
+		.elem_size	= sizeof(u8),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x2D,
+		.offset		= offsetof(struct qmi_wlanfw_host_cap_req_msg_v01,
+					   gpio_info_valid),
+	},
+	{
+		.data_type	= QMI_DATA_LEN,
+		.elem_len	= 1,
+		.elem_size	= sizeof(u8),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x2D,
+		.offset		= offsetof(struct qmi_wlanfw_host_cap_req_msg_v01,
+					   gpio_info_len),
+	},
+	{
+		.data_type	= QMI_UNSIGNED_4_BYTE,
+		.elem_len	= QMI_WLFW_MAX_NUM_GPIO_INFO_V01,
+		.elem_size	= sizeof(u32),
+		.array_type	= VAR_LEN_ARRAY,
+		.tlv_type	= 0x2D,
+		.offset		= offsetof(struct qmi_wlanfw_host_cap_req_msg_v01,
+					   gpio_info),
 	},
 	{
 		.data_type	= QMI_OPT_FLAG,
@@ -2436,6 +2490,21 @@ int ath12k_qmi_host_cap_send(struct ath12k_base *ab)
 	req.cal_done_valid = 1;
 	req.cal_done = ab->qmi.cal_done;
 
+	/* icnss2 ddr_range: the IOVA window and the MSA carveout the companion
+	 * die masters through
+	 */
+	if (ab->host_ddr_iova_size && ab->host_ddr_msa_size) {
+		req.ddr_range_valid = 1;
+		req.ddr_range[0].start = ab->host_ddr_iova_start;
+		req.ddr_range[0].size = ab->host_ddr_iova_size;
+		req.ddr_range[1].start = ab->host_ddr_msa_start;
+		req.ddr_range[1].size = ab->host_ddr_msa_size;
+		ath12k_dbg(ab, ATH12K_DBG_QMI,
+			   "qmi host cap ddr_range iova 0x%llx+0x%llx msa 0x%llx+0x%llx\n",
+			   req.ddr_range[0].start, req.ddr_range[0].size,
+			   req.ddr_range[1].start, req.ddr_range[1].size);
+	}
+
 	if (ab->hw_params->qmi_cnss_feature_bitmap) {
 		req.feature_list_valid = 1;
 		req.feature_list = ab->hw_params->qmi_cnss_feature_bitmap;
@@ -2466,6 +2535,20 @@ int ath12k_qmi_host_cap_send(struct ath12k_base *ab)
 	if (ab->qmi.dynamic_ddr_support) {
 		req.dynamic_mem_support_valid = 1;
 		req.dynamic_mem_support = 1;
+	}
+
+	/* icnss2 gpio_info: the Q6 registers its GPIO ISRs from this table */
+	if (ab->hybrid_bus) {
+		int n;
+
+		n = of_property_read_variable_u32_array(ab->dev->of_node,
+							"qcom,gpio-info",
+							req.gpio_info, 1,
+							QMI_WLFW_MAX_NUM_GPIO_INFO_V01);
+		if (n > 0) {
+			req.gpio_info_valid = 1;
+			req.gpio_info_len = n;
+		}
 	}
 
 	ret = qmi_txn_init(&ab->qmi.handle, &txn,
