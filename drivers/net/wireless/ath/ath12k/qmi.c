@@ -3649,7 +3649,7 @@ static int ath12k_qmi_wlanfw_wlan_cfg_send(struct ath12k_base *ab)
 		req->shadow_reg_v3_valid = 1;
 		req->shadow_reg_v3_len = min_t(u32,
 					       ab->qmi.ce_cfg.shadow_reg_v3_len,
-					       QMI_WLANFW_MAX_NUM_SHADOW_REG_V3_V01);
+					       ATH12K_QMI_MAX_USABLE_SHADOW_REG_V3);
 		memcpy(&req->shadow_reg_v3, ab->qmi.ce_cfg.shadow_reg_v3,
 		       sizeof(u32) * req->shadow_reg_v3_len);
 	} else {
