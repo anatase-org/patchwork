@@ -897,6 +897,110 @@ static const struct ath12k_hw_params ath12k_wifi7_hw_params[] = {
 
 		.host_alloc_ml_id = true,
 	},
+	{
+		/* qcc2072 datapath; the WLAN Q6 runs on the WPSS remoteproc */
+		.name = "wcn7750 hw1.0",
+		.hw_rev = ATH12K_HW_WCN7750_HW10,
+
+		.fw = {
+			.dir = "WCN7750/hw1.0",
+			.board_size = 256 * 1024,
+			.cal_offset = 256 * 1024,
+			/* pulled over QMI by the Q6 (icnss_load_phy_ucode()/icnss_load_aux()) */
+			.m3_loader = ath12k_m3_fw_loader_driver,
+			.download_aux_ucode = true,
+		},
+
+		.max_radios = 1,
+		.single_pdev_only = true,
+		.qmi_service_ins_id = ATH12K_QMI_WLFW_SERVICE_INS_ID_V01_WCN7750,
+
+		.fixed_fw_mem = true,
+		.internal_sleep_clock = true,
+
+		.hw_ops = &qcc2072_ops,
+		.ring_mask = &ath12k_wifi7_hw_ring_mask_wcn7850,
+
+		.host_ce_config = ath12k_wifi7_host_ce_config_wcn7750,
+		.ce_count = 9,
+		.target_ce_config = ath12k_wifi7_target_ce_config_wlan_wcn7750,
+		.target_ce_count = 9,
+		.svc_to_ce_map =
+			ath12k_wifi7_target_service_to_ce_map_wlan_wcn7750,
+		.svc_to_ce_map_len = 15,
+
+		.rxdma1_enable = false,
+		.num_rxdma_per_pdev = 2,
+		.num_rxdma_dst_ring = 1,
+		.rx_mac_buf_ring = true,
+		.vdev_start_delay = true,
+
+		.interface_modes = BIT(NL80211_IFTYPE_STATION) |
+				   BIT(NL80211_IFTYPE_AP) |
+				   BIT(NL80211_IFTYPE_P2P_DEVICE) |
+				   BIT(NL80211_IFTYPE_P2P_CLIENT) |
+				   BIT(NL80211_IFTYPE_P2P_GO),
+		.supports_monitor = true,
+		.supports_cong_ctrl_max_msdus = false,
+
+		.idle_ps = true,
+		.download_calib = false,
+		.supports_suspend = true,
+		.tcl_ring_retry = false,
+		.reoq_lut_support = false,
+
+		/* below ATH12K_PCI_WINDOW_START, so written straight to the BAR */
+		.supports_shadow_regs = true,
+		.hal_shadow_base_addr = HAL_SHADOW_BASE_ADDR_WCN7750,
+
+		.supports_coldboot_cal = true,
+
+		.num_tcl_banks = 7,
+		.max_tx_ring = 3,
+
+		.mhi_config = NULL,
+
+		.wmi_init = ath12k_wifi7_wmi_init_wcn7850,
+
+		/* QDSS_CFG_MISS must stay clear: the firmware needs the trace config */
+		.qmi_cnss_feature_bitmap = BIT(CNSS_AUX_UC_SUPPORT_V01),
+
+		.rfkill_pin = 0,
+		.rfkill_cfg = 0,
+		.rfkill_on_level = 0,
+
+		.rddm_size = 0,
+
+		.def_num_link = 2,
+		.max_mlo_peer = 32,
+
+		.otp_board_id_register = 0,
+
+		.supports_sta_ps = true,
+
+		.acpi_guid = NULL,
+		.supports_dynamic_smps_6ghz = false,
+
+		.iova_mask = 0,
+
+		.supports_aspm = false,
+
+		.ce_ie_addr = NULL,
+		/* CE block reached through a static window in the QMI-reported BAR */
+		.ce_remap = NULL,
+		.bdf_addr_offset = 0,
+
+		.current_cc_support = true,
+
+		.dp_primary_link_only = false,
+		.client = {
+			.max_client_single = 512,
+			.max_client_dbs = 128,
+			.max_client_dbs_sbs = 128,
+		},
+
+		.host_alloc_ml_id = false,
+	},
 };
 
 /* Note: called under rcu_read_lock() */
@@ -1223,7 +1327,7 @@ static const struct ieee80211_ops ath12k_ops_wifi7 = {
 int ath12k_wifi7_hw_init(struct ath12k_base *ab)
 {
 	const struct ath12k_hw_params *hw_params = NULL;
-	int i;
+	int i, ret;
 
 	for (i = 0; i < ARRAY_SIZE(ath12k_wifi7_hw_params); i++) {
 		hw_params = &ath12k_wifi7_hw_params[i];
@@ -1241,7 +1345,9 @@ int ath12k_wifi7_hw_init(struct ath12k_base *ab)
 	ab->hw_params = hw_params;
 	ab->ath12k_ops = &ath12k_ops_wifi7;
 
-	ath12k_wifi7_hal_init(ab);
+	ret = ath12k_wifi7_hal_init(ab);
+	if (ret)
+		return ret;
 
 	ath12k_info(ab, "Wi-Fi 7 Hardware name: %s\n", ab->hw_params->name);
 
