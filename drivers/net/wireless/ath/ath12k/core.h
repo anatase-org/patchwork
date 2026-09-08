@@ -1031,6 +1031,12 @@ struct ath12k_base {
 	/* UMAC/CE window bases */
 	const struct ath12k_pci_reg_base *reg_base;
 
+	/* WCN7750: windowed access into a BAR reported over QMI */
+	bool hybrid_bus;
+
+	/* keeps ab->mem stable across recovery */
+	u64 hybrid_bar_pa;
+
 	struct napi_struct *napi;
 	struct ath12k_wmi_target_cap_arg target_caps;
 	u32 ext_service_bitmap[WMI_SERVICE_EXT_BM_SIZE];
