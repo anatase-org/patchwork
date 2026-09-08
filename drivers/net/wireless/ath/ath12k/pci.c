@@ -375,7 +375,9 @@ static void ath12k_pci_ce_irqs_disable(struct ath12k_base *ab)
 {
 	int i;
 
-	clear_bit(ATH12K_FLAG_CE_IRQ_ENABLED, &ab->dev_flags);
+	/* Idempotent: disable_irq_nosync() nests. */
+	if (!test_and_clear_bit(ATH12K_FLAG_CE_IRQ_ENABLED, &ab->dev_flags))
+		return;
 
 	for (i = 0; i < ab->hw_params->ce_count; i++) {
 		if (ath12k_ce_get_attr_flags(ab, i) & CE_ATTR_DIS_INTR)
@@ -951,7 +953,9 @@ static void ath12k_pci_cancel_workqueue(struct ath12k_base *ab)
 		if (ath12k_ce_get_attr_flags(ab, i) & CE_ATTR_DIS_INTR)
 			continue;
 
-		cancel_work_sync(&ce_pipe->intr_wq);
+		/* the pending work owns the handler's enable_irq() */
+		if (cancel_work_sync(&ce_pipe->intr_wq))
+			enable_irq(ab->irq_num[ATH12K_PCI_IRQ_CE0_OFFSET + i]);
 	}
 }
 
