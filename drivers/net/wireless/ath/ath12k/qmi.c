@@ -9,6 +9,7 @@
 #include "qmi.h"
 #include "core.h"
 #include "debug.h"
+#include "hif.h"
 #include <linux/of.h>
 #include <linux/firmware.h>
 #include <linux/of_address.h>
@@ -1094,6 +1095,68 @@ static const struct qmi_elem_info qmi_wlanfw_respond_mem_resp_msg_v01_ei[] = {
 };
 
 static const struct qmi_elem_info qmi_wlanfw_cap_req_msg_v01_ei[] = {
+	{
+		.data_type	= QMI_EOTI,
+		.array_type	= NO_ARRAY,
+		.tlv_type	= QMI_COMMON_TLV_TYPE,
+	},
+};
+
+static const struct qmi_elem_info qmi_wlanfw_device_info_req_msg_v01_ei[] = {
+	{
+		.data_type	= QMI_EOTI,
+		.array_type	= NO_ARRAY,
+		.tlv_type	= QMI_COMMON_TLV_TYPE,
+	},
+};
+
+static const struct qmi_elem_info qmi_wlanfw_device_info_resp_msg_v01_ei[] = {
+	{
+		.data_type	= QMI_STRUCT,
+		.elem_len	= 1,
+		.elem_size	= sizeof(struct qmi_response_type_v01),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x02,
+		.offset		= offsetof(struct qmi_wlanfw_device_info_resp_msg_v01,
+					   resp),
+		.ei_array	= qmi_response_type_v01_ei,
+	},
+	{
+		.data_type	= QMI_OPT_FLAG,
+		.elem_len	= 1,
+		.elem_size	= sizeof(u8),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x10,
+		.offset		= offsetof(struct qmi_wlanfw_device_info_resp_msg_v01,
+					   bar_addr_valid),
+	},
+	{
+		.data_type	= QMI_UNSIGNED_8_BYTE,
+		.elem_len	= 1,
+		.elem_size	= sizeof(u64),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x10,
+		.offset		= offsetof(struct qmi_wlanfw_device_info_resp_msg_v01,
+					   bar_addr),
+	},
+	{
+		.data_type	= QMI_OPT_FLAG,
+		.elem_len	= 1,
+		.elem_size	= sizeof(u8),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x11,
+		.offset		= offsetof(struct qmi_wlanfw_device_info_resp_msg_v01,
+					   bar_size_valid),
+	},
+	{
+		.data_type	= QMI_UNSIGNED_4_BYTE,
+		.elem_len	= 1,
+		.elem_size	= sizeof(u32),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x11,
+		.offset		= offsetof(struct qmi_wlanfw_device_info_resp_msg_v01,
+					   bar_size),
+	},
 	{
 		.data_type	= QMI_EOTI,
 		.array_type	= NO_ARRAY,
@@ -2992,6 +3055,101 @@ out:
 	return ret;
 }
 
+/* ath11k_qmi_request_device_info(): the target reports its register BAR
+ * once the Q6 is up.
+ */
+static int ath12k_qmi_request_device_info(struct ath12k_base *ab)
+{
+	struct qmi_wlanfw_device_info_resp_msg_v01 resp = {};
+	struct qmi_wlanfw_device_info_req_msg_v01 req = {};
+	void __iomem *bar_addr_va;
+	struct qmi_txn txn;
+	int ret;
+
+	if (!ab->hybrid_bus)
+		return 0;
+
+	ret = qmi_txn_init(&ab->qmi.handle, &txn,
+			   qmi_wlanfw_device_info_resp_msg_v01_ei, &resp);
+	if (ret < 0)
+		return ret;
+
+	ret = qmi_send_request(&ab->qmi.handle, NULL, &txn,
+			       QMI_WLANFW_DEVICE_INFO_REQ_V01,
+			       QMI_WLANFW_DEVICE_INFO_REQ_MSG_V01_MAX_LEN,
+			       qmi_wlanfw_device_info_req_msg_v01_ei, &req);
+	if (ret < 0) {
+		qmi_txn_cancel(&txn);
+		ath12k_warn(ab, "failed to send qmi device info request: %d\n", ret);
+		return ret;
+	}
+
+	ret = qmi_txn_wait(&txn, msecs_to_jiffies(ATH12K_QMI_WLANFW_TIMEOUT_MS));
+	if (ret < 0) {
+		ath12k_warn(ab, "failed to wait qmi device info request: %d\n", ret);
+		return ret;
+	}
+
+	if (resp.resp.result != QMI_RESULT_SUCCESS_V01) {
+		ath12k_warn(ab, "qmi device info request failed: %d %d\n",
+			    resp.resp.result, resp.resp.error);
+		return -EINVAL;
+	}
+
+	if (!resp.bar_addr_valid || !resp.bar_size_valid) {
+		ath12k_warn(ab, "qmi device info response invalid: %d %d\n",
+			    resp.resp.result, resp.resp.error);
+		return -EINVAL;
+	}
+
+	if (!resp.bar_addr || resp.bar_size != ATH12K_QMI_DEVICE_BAR_SIZE) {
+		ath12k_warn(ab, "qmi device info invalid address and size: %llu %u\n",
+			    resp.bar_addr, resp.bar_size);
+		return -EINVAL;
+	}
+
+	/* ab->mem must not move: the HAL caches doorbell pointers relative to it */
+	if (ab->mem) {
+		if (ab->hybrid_bar_pa != resp.bar_addr ||
+		    ab->mem_len != resp.bar_size) {
+			ath12k_err(ab, "qmi device info bar moved: 0x%llx+0x%lx -> 0x%llx+0x%x\n",
+				   ab->hybrid_bar_pa, ab->mem_len,
+				   resp.bar_addr, resp.bar_size);
+			return -EINVAL;
+		}
+
+		ath12k_dbg(ab, ATH12K_DBG_QMI,
+			   "qmi device info bar addr 0x%llx already mapped\n",
+			   resp.bar_addr);
+
+		/* re-arm on every bring-up */
+		ath12k_hif_cfg_static_window(ab);
+
+		return 0;
+	}
+
+	bar_addr_va = devm_ioremap(ab->dev, resp.bar_addr, resp.bar_size);
+	if (!bar_addr_va) {
+		ath12k_warn(ab, "qmi device info ioremap failed\n");
+		ab->mem_len = 0;
+		return -EIO;
+	}
+
+	ab->mem = bar_addr_va;
+	ab->mem_len = resp.bar_size;
+	ab->hybrid_bar_pa = resp.bar_addr;
+
+	if (!ab->hw_params->ce_remap)
+		ab->mem_ce = ab->mem;
+
+	ath12k_dbg(ab, ATH12K_DBG_QMI, "qmi device info bar addr 0x%llx size 0x%x mapped\n",
+		   resp.bar_addr, resp.bar_size);
+
+	ath12k_hif_cfg_static_window(ab);
+
+	return 0;
+}
+
 /* clang stack usage explodes if this is inlined */
 static noinline_for_stack
 int ath12k_qmi_request_target_cap(struct ath12k_base *ab)
@@ -4024,6 +4182,13 @@ int ath12k_qmi_event_load_bdf(struct ath12k_qmi *qmi)
 	ret = ath12k_qmi_request_target_cap(ab);
 	if (ret < 0) {
 		ath12k_warn(ab, "qmi failed to req target capabilities:%d\n", ret);
+		return ret;
+	}
+
+	/* Hybrid bus only: learn where the register BAR lives and map it. */
+	ret = ath12k_qmi_request_device_info(ab);
+	if (ret < 0) {
+		ath12k_warn(ab, "qmi failed to req device info:%d\n", ret);
 		return ret;
 	}
 

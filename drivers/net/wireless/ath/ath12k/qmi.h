@@ -377,6 +377,23 @@ struct qmi_wlanfw_fw_ready_ind_msg_v01 {
 #define QMI_WLANFW_CAP_REQ_MSG_V01_MAX_LEN	0
 #define QMI_WLANFW_CAP_REQ_V01			0x0024
 
+/* The target reports its register BAR once the Q6 is up. */
+#define QMI_WLANFW_DEVICE_INFO_REQ_V01			0x004C
+#define QMI_WLANFW_DEVICE_INFO_REQ_MSG_V01_MAX_LEN	0
+#define ATH12K_QMI_DEVICE_BAR_SIZE			0x200000
+
+struct qmi_wlanfw_device_info_req_msg_v01 {
+	char placeholder;
+};
+
+struct qmi_wlanfw_device_info_resp_msg_v01 {
+	struct qmi_response_type_v01 resp;
+	u64 bar_addr;
+	u32 bar_size;
+	u8 bar_addr_valid;
+	u8 bar_size_valid;
+};
+
 enum qmi_wlanfw_pipedir_enum_v01 {
 	QMI_WLFW_PIPEDIR_NONE_V01 = 0,
 	QMI_WLFW_PIPEDIR_IN_V01 = 1,
