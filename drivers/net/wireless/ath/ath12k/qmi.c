@@ -2410,10 +2410,17 @@ static int ath12k_qmi_fw_ind_register_send(struct ath12k_base *ab)
 	req->client_id = QMI_WLANFW_CLIENT_ID;
 	req->fw_ready_enable_valid = 1;
 	req->fw_ready_enable = 1;
-	req->request_mem_enable_valid = 1;
-	req->request_mem_enable = 1;
-	req->fw_mem_ready_enable_valid = 1;
-	req->fw_mem_ready_enable = 1;
+
+	/* Fixed-MSA targets must not be asked for request_mem/fw_mem_ready
+	 * (ath11k WCN6750).
+	 */
+	if (!ab->hw_params->fixed_fw_mem) {
+		req->request_mem_enable_valid = 1;
+		req->request_mem_enable = 1;
+		req->fw_mem_ready_enable_valid = 1;
+		req->fw_mem_ready_enable = 1;
+	}
+
 	req->cal_done_enable_valid = 1;
 	req->cal_done_enable = 1;
 	req->fw_init_done_enable_valid = 1;
@@ -3744,7 +3751,11 @@ int ath12k_qmi_event_server_arrive(struct ath12k_qmi *qmi)
 	struct ath12k_hw_group *ag = ab->ag;
 	int ret;
 
-	ath12k_qmi_phy_cap_send(ab);
+	/* Not sent by ath11k WCN6750 nor icnss2; the firmware predates it. */
+	if (ab->hw_params->fixed_fw_mem)
+		ab->qmi.num_radios = ab->hw_params->def_num_link;
+	else
+		ath12k_qmi_phy_cap_send(ab);
 
 	ret = ath12k_qmi_fw_ind_register_send(ab);
 	if (ret < 0) {
@@ -3984,6 +3995,15 @@ static int ath12k_qmi_event_host_cap(struct ath12k_qmi *qmi)
 		ath12k_warn(ab, "failed to send qmi host cap for device id %u: %d\n",
 			    ab->device_id, ret);
 		return ret;
+	}
+
+	/* no memory request round trip; go straight to BDF (ath11k WCN6750) */
+	if (ab->hw_params->fixed_fw_mem) {
+		ret = ath12k_qmi_event_load_bdf(qmi);
+		if (ret < 0) {
+			ath12k_warn(ab, "qmi failed to download BDF: %d\n", ret);
+			return ret;
+		}
 	}
 
 	return ret;

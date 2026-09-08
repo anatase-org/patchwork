@@ -197,6 +197,9 @@ struct ath12k_hw_params {
 	bool current_cc_support:1;
 	bool supports_cong_ctrl_max_msdus:1;
 
+	/* fixed MSA region: no request_mem/fw_mem_ready, host_cap -> BDF directly */
+	bool fixed_fw_mem:1;
+
 	/* 0x8fc on PCIe parts, 0x504 on WPSS-hosted WCN parts */
 	u32 hal_shadow_base_addr;
 
