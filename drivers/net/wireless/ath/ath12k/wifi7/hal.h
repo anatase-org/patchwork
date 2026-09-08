@@ -16,11 +16,13 @@
 
 /* calculate the register address from bar0 of shadow register x */
 #define HAL_SHADOW_BASE_ADDR			0x000008fc
+#define HAL_SHADOW_BASE_ADDR_WCN7750		0x00000504
 #define HAL_SHADOW_NUM_REGS			40
 #define HAL_HP_OFFSET_IN_REG_START		1
 #define HAL_OFFSET_FROM_HP_TO_TP		4
 
-#define HAL_SHADOW_REG(x) (HAL_SHADOW_BASE_ADDR + (4 * (x)))
+#define HAL_SHADOW_REG(ab, x) \
+	((ab)->hw_params->hal_shadow_base_addr + (4 * (x)))
 #define HAL_REO_QDESC_MAX_PEERID		8191
 
 /* WCSS Relative address */
