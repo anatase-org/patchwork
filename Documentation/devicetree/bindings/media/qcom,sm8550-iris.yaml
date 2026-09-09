@@ -23,6 +23,7 @@ properties:
               - qcom,x1e80100-iris
           - const: qcom,sm8550-iris
       - enum:
+          - qcom,eliza-iris
           - qcom,qcs8300-iris
           - qcom,sm8550-iris
           - qcom,sm8650-iris
@@ -38,8 +39,8 @@ properties:
     items:
       - const: venus
       - const: vcodec0
-      - const: mxc
-      - const: mmcx
+      - enum: [ mxc, mx ]
+      - enum: [ mmcx, cx ]
 
   clocks:
     minItems: 3
@@ -69,7 +70,7 @@ properties:
 
   resets:
     minItems: 1
-    maxItems: 3
+    maxItems: 4
 
   reset-names:
     minItems: 1
@@ -77,6 +78,7 @@ properties:
       - const: bus
       - const: xo
       - const: core
+      - const: vcodec0_core
 
   iommus:
     maxItems: 2
@@ -106,14 +108,48 @@ allOf:
       properties:
         compatible:
           enum:
+            - qcom,eliza-iris
+    then:
+      properties:
+        resets:
+          minItems: 4
+        reset-names:
+          minItems: 4
+        power-domain-names:
+          items:
+            - const: venus
+            - const: vcodec0
+            - const: mx
+            - const: cx
+    else:
+      properties:
+        power-domain-names:
+          items:
+            - const: venus
+            - const: vcodec0
+            - const: mxc
+            - const: mmcx
+  - if:
+      properties:
+        compatible:
+          enum:
             - qcom,sm8650-iris
     then:
       properties:
         resets:
           minItems: 3
+          maxItems: 3
         reset-names:
           minItems: 3
-    else:
+          maxItems: 3
+  - if:
+      properties:
+        compatible:
+          enum:
+            - qcom,qcs8300-iris
+            - qcom,sm8550-iris
+            - qcom,x1p42100-iris
+    then:
       properties:
         resets:
           maxItems: 1
