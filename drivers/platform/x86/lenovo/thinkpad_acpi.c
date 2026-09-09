@@ -7943,7 +7943,7 @@ enum fan_control_commands {
 						 * and also watchdog cmd */
 };
 
-static bool fan_control_allowed;
+static bool fan_control_allowed = true;
 
 static enum fan_status_access_mode fan_status_access_mode;
 static enum fan_control_access_mode fan_control_access_mode;
@@ -12003,7 +12003,7 @@ MODULE_PARM_DESC(force_load,
 
 module_param_named(fan_control, fan_control_allowed, bool, 0444);
 MODULE_PARM_DESC(fan_control,
-		 "Enables setting fan parameters features when true");
+		 "Enables setting fan parameters features when true (default: true)");
 
 module_param_named(brightness_mode, brightness_mode, uint, 0444);
 MODULE_PARM_DESC(brightness_mode,
