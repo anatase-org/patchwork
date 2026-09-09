@@ -33,7 +33,7 @@ fi
                 echo "No SRPM found after build. Something went wrong."
                 exit 1
         fi
-        rpm2cpio ./redhat/rpm/SRPMS/kernel-*.src.rpm | cpio -idmv -D ../kernel-anatase
+        rpm2cpio ./redhat/rpm/SRPMS/kernel-*.src.rpm | cpio -idmvu -D ../kernel-anatase
         tag=$(rpm -qp --qf '%{VERSION}' ./redhat/rpm/SRPMS/kernel-*.src.rpm | sed 's/-/./g')-$relver
         echo Tag: $tag
         git -C ../kernel-anatase add .
