@@ -1155,6 +1155,7 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client)
 	const struct edt_i2c_chip_data *chip_data;
 	struct edt_ft5x06_ts_data *tsdata;
 	unsigned int val;
+	const char *label;
 	struct input_dev *input;
 	unsigned long irq_flags;
 	int error;
@@ -1327,6 +1328,10 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client)
 	dev_dbg(&client->dev,
 		"Model \"%s\", Rev. \"%s\", %dx%d sensors\n",
 		tsdata->name, tsdata->fw_version, tsdata->num_x, tsdata->num_y);
+
+	/* Allow device tree to override the input device name */
+	if (!device_property_read_string(&client->dev, "label", &label))
+		strscpy(tsdata->name, label, EDT_NAME_LEN);
 
 	input->name = tsdata->name;
 	input->id.bustype = BUS_I2C;
