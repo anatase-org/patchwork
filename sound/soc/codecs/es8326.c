@@ -12,6 +12,7 @@
 #include <linux/interrupt.h>
 #include <linux/irq.h>
 #include <linux/module.h>
+#include <linux/regulator/consumer.h>
 #include <sound/jack.h>
 #include <sound/pcm_params.h>
 #include <sound/soc.h>
@@ -21,6 +22,8 @@
 
 struct es8326_priv {
 	struct clk *mclk;
+	struct regulator_bulk_data supplies[2];
+	bool supplies_enabled;
 	struct i2c_client *i2c;
 	struct regmap *regmap;
 	struct snd_soc_component *component;
@@ -1285,6 +1288,19 @@ static int es8326_i2c_probe(struct i2c_client *i2c)
 	if (!es8326)
 		return -ENOMEM;
 
+	/* optional: boards without them keep the rails on by other means */
+	es8326->supplies[0].supply = "vdd";
+	es8326->supplies[1].supply = "vddio";
+	ret = devm_regulator_bulk_get(&i2c->dev, ARRAY_SIZE(es8326->supplies),
+				      es8326->supplies);
+	if (!ret)
+		ret = regulator_bulk_enable(ARRAY_SIZE(es8326->supplies),
+					    es8326->supplies);
+	if (ret)
+		dev_warn(&i2c->dev, "supplies not enabled: %d\n", ret);
+	else
+		es8326->supplies_enabled = true;
+
 	i2c_set_clientdata(i2c, es8326);
 	es8326->i2c = i2c;
 	mutex_init(&es8326->lock);
@@ -1354,7 +1370,13 @@ static void es8326_i2c_shutdown(struct i2c_client *i2c)
 
 static void es8326_i2c_remove(struct i2c_client *i2c)
 {
+	struct es8326_priv *es8326 = i2c_get_clientdata(i2c);
+
 	es8326_i2c_shutdown(i2c);
+
+	if (es8326->supplies_enabled)
+		regulator_bulk_disable(ARRAY_SIZE(es8326->supplies),
+				       es8326->supplies);
 }
 
 static const struct i2c_device_id es8326_i2c_id[] = {
