@@ -12,6 +12,7 @@
 #include "iris_vpu_buffer.h"
 #include "iris_vpu_common.h"
 
+#include "iris_platform_eliza.h"
 #include "iris_platform_qcs8300.h"
 #include "iris_platform_sm8550.h"
 #include "iris_platform_sm8650.h"
@@ -34,6 +35,12 @@ static const struct iris_firmware_desc iris_vpu30_p1_gen2_desc = {
 	.firmware_data = &iris_hfi_gen2_data,
 	.get_vpu_buffer_size = iris_vpu_buf_size,
 	.fwname = "qcom/vpu/vpu30_p1_s7.mbn",
+};
+
+static const struct iris_firmware_desc iris_vpu30_p2_gen2_desc = {
+	.firmware_data = &iris_hfi_gen2_data,
+	.get_vpu_buffer_size = iris_vpu33_buf_size,
+	.fwname = "qcom/vpu/vpu30_p2.mbn",
 };
 
 static const struct iris_firmware_desc iris_vpu33_p4_gen2_desc = {
@@ -89,6 +96,43 @@ static const struct tz_cp_config tz_cp_config_vpu3[] = {
  * Shares most of SM8550 data except:
  * - inst_caps to platform_inst_cap_qcs8300
  */
+/*
+ * Two-pipe VPU33: shares most of SM8650 data except:
+ * - firmware, inst_caps and num_vpp_pipe for a 4K-class core
+ * - clk_rst_tbl with the extra vcodec0_core reset
+ * - opp_pd_tbl on MX/CX (no MXC/MMCX rails)
+ */
+const struct iris_platform_data eliza_data = {
+	.firmware_desc_gen2 = &iris_vpu30_p2_gen2_desc,
+	.vpu_ops = &iris_vpu33_ops,
+	.icc_tbl = iris_icc_info_vpu3x,
+	.icc_tbl_size = ARRAY_SIZE(iris_icc_info_vpu3x),
+	.clk_rst_tbl = eliza_clk_reset_table,
+	.clk_rst_tbl_size = ARRAY_SIZE(eliza_clk_reset_table),
+	.controller_rst_tbl = sm8650_controller_reset_table,
+	.controller_rst_tbl_size = ARRAY_SIZE(sm8650_controller_reset_table),
+	.bw_tbl_dec = iris_bw_table_dec_vpu3x,
+	.bw_tbl_dec_size = ARRAY_SIZE(iris_bw_table_dec_vpu3x),
+	.pmdomain_tbl = iris_pmdomain_table_vpu3x,
+	.pmdomain_tbl_size = ARRAY_SIZE(iris_pmdomain_table_vpu3x),
+	.opp_pd_tbl = eliza_opp_pd_table,
+	.opp_pd_tbl_size = ARRAY_SIZE(eliza_opp_pd_table),
+	.clk_tbl = sm8550_clk_table,
+	.clk_tbl_size = ARRAY_SIZE(sm8550_clk_table),
+	.opp_clk_tbl = iris_opp_clk_table_vpu3x,
+	/* Upper bound of DMA address range */
+	.dma_mask = 0xe0000000 - 1,
+	.inst_iris_fmts = iris_fmts_vpu3x_dec,
+	.inst_iris_fmts_size = ARRAY_SIZE(iris_fmts_vpu3x_dec),
+	.inst_caps = &platform_inst_cap_eliza,
+	.tz_cp_config_data = tz_cp_config_vpu3,
+	.tz_cp_config_data_size = ARRAY_SIZE(tz_cp_config_vpu3),
+	.num_vpp_pipe = 2,
+	.max_session_count = 16,
+	.max_core_mbpf = ((1920 * 1088) / 256) * 24,
+	.max_core_mbps = ((4096 * 2176) / 256) * 60,
+};
+
 const struct iris_platform_data qcs8300_data = {
 	.firmware_desc_gen2 = &iris_vpu30_p4_s6_gen2_desc,
 	.vpu_ops = &iris_vpu3_ops,
