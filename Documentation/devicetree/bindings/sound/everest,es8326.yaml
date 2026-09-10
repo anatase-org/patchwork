@@ -31,6 +31,12 @@ properties:
   "#sound-dai-cells":
     const: 0
 
+  vdd-supply:
+    description: Analog and digital core supply (AVDD/DVDD)
+
+  vddio-supply:
+    description: I/O supply
+
   everest,jack-pol:
     $ref: /schemas/types.yaml#/definitions/uint8
     description: |
