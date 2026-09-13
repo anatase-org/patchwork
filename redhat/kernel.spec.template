@@ -3112,6 +3112,10 @@ BuildKernel() {
 	for i in x1 sc8?80x; do
 	    Dtbs="$Dtbs $(ls $i*.dtb | grep -v -E 'el2|devkit|crd|qcp|primus')"
 	done
+	# Include RP6 for stubble's firmware-HWID based DT selection.
+	# Fail the build if the board DTB was not produced.
+	test -f qcs8550-retroidpocket-rp6.dtb || exit 1
+	Dtbs="$Dtbs qcs8550-retroidpocket-rp6.dtb"
 	popd
 
 	DevicetreeAuto=""

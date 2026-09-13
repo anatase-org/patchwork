@@ -6,6 +6,9 @@ CONFIG_IKCONFIG_PROC=y
 CONFIG_HID_8BITDO=m
 CONFIG_INPUT_FF_MEMLESS=y
 
+# Enabled by the ARM64 override for RP6
+# CONFIG_LEDS_HTR3212 is not set
+
 # Disable these for all arches except arm/x86
 # CONFIG_SND_SOC_AW87XXX is not set
 # CONFIG_JOYSTICK_ODIN2 is not set
