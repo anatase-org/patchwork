@@ -11,6 +11,15 @@ maintainers:
 
 allOf:
   - $ref: panel-common.yaml#
+  - if:
+      properties:
+        compatible:
+          not:
+            contains:
+              const: retroidpocket,rp6-panel
+    then:
+      required:
+        - vdd-supply
 
 properties:
   compatible:
