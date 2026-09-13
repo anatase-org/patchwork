@@ -28,9 +28,6 @@ struct visionox_vtdr6130 {
 };
 
 struct visionox_vtdr6130_desc {
-	unsigned int width_mm;
-	unsigned int height_mm;
-
 	unsigned int bpc;
 	unsigned int lanes;
 	unsigned long mode_flags;
@@ -291,14 +288,14 @@ static const struct drm_display_mode retroidpocket_rp6_modes[] = {
 		.vsync_start = 1920 + 16,
 		.vsync_end = 1920 + 16 + 2,
 		.vtotal = 1920 + 16 + 2 + 20,
+		.width_mm = 69,
+		.height_mm = 122,
 	},
 };
 
 static struct visionox_vtdr6130_desc retroidpocket_rp6_panel_desc = {
 	.modes = retroidpocket_rp6_modes,
 	.num_modes = ARRAY_SIZE(retroidpocket_rp6_modes),
-	.width_mm = 69,
-	.height_mm = 122,
 	.bpc = 8,
 	.lanes = 4,
 	.format = MIPI_DSI_FMT_RGB888,
@@ -328,14 +325,14 @@ static const struct drm_display_mode visionox_vtdr6130_modes[] = {
 		.vsync_start = 2400 + 20,
 		.vsync_end = 2400 + 20 + 2,
 		.vtotal = 2400 + 20 + 2 + 18,
+		.width_mm = 71,
+		.height_mm = 157,
 	},
 };
 
 static struct visionox_vtdr6130_desc visionox_vtdr6130_panel_desc = {
 	.modes = visionox_vtdr6130_modes,
 	.num_modes = ARRAY_SIZE(visionox_vtdr6130_modes),
-	.width_mm = 71,
-	.height_mm = 157,
 	.bpc = 8,
 	.lanes = 4,
 	.format = MIPI_DSI_FMT_RGB888,
@@ -367,8 +364,8 @@ static int visionox_vtdr6130_get_modes(struct drm_panel *panel,
 	drm_mode_set_name(mode);
 
 	mode->type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
-	connector->display_info.width_mm = ctx->desc->width_mm;
-	connector->display_info.height_mm = ctx->desc->height_mm;
+	connector->display_info.width_mm = mode->width_mm;
+	connector->display_info.height_mm = mode->height_mm;
 	drm_mode_probed_add(connector, mode);
 
 	return 1;
