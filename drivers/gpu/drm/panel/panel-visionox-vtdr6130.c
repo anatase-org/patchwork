@@ -36,6 +36,8 @@ struct visionox_vtdr6130_desc {
 	const struct drm_display_mode *modes;
 	unsigned int num_modes;
 	int (*init_sequence)(struct visionox_vtdr6130 *ctx);
+	const struct regulator_bulk_data *supplies;
+	unsigned int num_supplies;
 
 	struct drm_dsc_config dsc;
 };
@@ -44,6 +46,11 @@ static const struct regulator_bulk_data visionox_vtdr6130_supplies[] = {
 	{ .supply = "vddio" },
 	{ .supply = "vci" },
 	{ .supply = "vdd" },
+};
+
+static const struct regulator_bulk_data retroidpocket_rp6_supplies[] = {
+	{ .supply = "vddio" },
+	{ .supply = "vci" },
 };
 
 static inline struct visionox_vtdr6130 *to_visionox_vtdr6130(struct drm_panel *panel)
@@ -245,7 +252,7 @@ static int visionox_vtdr6130_prepare(struct drm_panel *panel)
 	struct visionox_vtdr6130 *ctx = to_visionox_vtdr6130(panel);
 	int ret;
 
-	ret = regulator_bulk_enable(ARRAY_SIZE(visionox_vtdr6130_supplies),
+	ret = regulator_bulk_enable(ctx->desc->num_supplies,
 				    ctx->supplies);
 	if (ret < 0)
 		return ret;
@@ -255,7 +262,7 @@ static int visionox_vtdr6130_prepare(struct drm_panel *panel)
 	ret = ctx->desc->init_sequence(ctx);
 	if (ret < 0) {
 		gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-		regulator_bulk_disable(ARRAY_SIZE(visionox_vtdr6130_supplies),
+		regulator_bulk_disable(ctx->desc->num_supplies,
 				       ctx->supplies);
 		return ret;
 	}
@@ -271,7 +278,7 @@ static int visionox_vtdr6130_unprepare(struct drm_panel *panel)
 
 	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
 
-	regulator_bulk_disable(ARRAY_SIZE(visionox_vtdr6130_supplies),
+	regulator_bulk_disable(ctx->desc->num_supplies,
 			       ctx->supplies);
 
 	return 0;
@@ -302,6 +309,8 @@ static struct visionox_vtdr6130_desc retroidpocket_rp6_panel_desc = {
 	.mode_flags = MIPI_DSI_MODE_NO_EOT_PACKET |
 		      MIPI_DSI_CLOCK_NON_CONTINUOUS,
 	.init_sequence = retroidpocket_rp6_on,
+	.supplies = retroidpocket_rp6_supplies,
+	.num_supplies = ARRAY_SIZE(retroidpocket_rp6_supplies),
 	.dsc = {
 		.dsc_version_major = 0x1,
 		.dsc_version_minor = 0x1,
@@ -339,6 +348,8 @@ static struct visionox_vtdr6130_desc visionox_vtdr6130_panel_desc = {
 	.mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_NO_EOT_PACKET |
 		      MIPI_DSI_CLOCK_NON_CONTINUOUS,
 	.init_sequence = visionox_vtdr6130_on,
+	.supplies = visionox_vtdr6130_supplies,
+	.num_supplies = ARRAY_SIZE(visionox_vtdr6130_supplies),
 	.dsc = {
 		.dsc_version_major = 0x1,
 		.dsc_version_minor = 0x2,
@@ -423,9 +434,13 @@ static int visionox_vtdr6130_probe(struct mipi_dsi_device *dsi)
 	if (IS_ERR(ctx))
 		return PTR_ERR(ctx);
 
+	ctx->desc = (struct visionox_vtdr6130_desc *)of_device_get_match_data(dev);
+	if (!ctx->desc)
+		return -ENODEV;
+
 	ret = devm_regulator_bulk_get_const(&dsi->dev,
-					    ARRAY_SIZE(visionox_vtdr6130_supplies),
-					    visionox_vtdr6130_supplies,
+					    ctx->desc->num_supplies,
+					    ctx->desc->supplies,
 					    &ctx->supplies);
 	if (ret < 0)
 		return ret;
@@ -434,10 +449,6 @@ static int visionox_vtdr6130_probe(struct mipi_dsi_device *dsi)
 	if (IS_ERR(ctx->reset_gpio))
 		return dev_err_probe(dev, PTR_ERR(ctx->reset_gpio),
 				     "Failed to get reset-gpios\n");
-
-	ctx->desc = (struct visionox_vtdr6130_desc *)of_device_get_match_data(dev);
-	if (!ctx->desc)
-		return -ENODEV;
 
 	ctx->dsi = dsi;
 	mipi_dsi_set_drvdata(dsi, ctx);
