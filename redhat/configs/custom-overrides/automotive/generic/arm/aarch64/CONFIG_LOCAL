@@ -1,0 +1,2 @@
+# No ADC-connected joystick is used by the ARM64 automotive configuration
+# CONFIG_JOYSTICK_ADC is not set
