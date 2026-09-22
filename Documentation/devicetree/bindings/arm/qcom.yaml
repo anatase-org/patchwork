@@ -1186,6 +1186,11 @@ properties:
           - const: qcom,x1p42100
 
       - items:
+          - const: samsung,galaxy-book4-edge-np750xqb
+          - const: samsung,galaxy-book4-edge
+          - const: qcom,x1p42100
+
+      - items:
           - enum:
               - qcom,purwa-iot-evk
           - const: qcom,purwa-iot-som
