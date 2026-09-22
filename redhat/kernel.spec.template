@@ -1117,6 +1117,8 @@ Source87: flavors
 Source151: uki_create_addons.py
 Source152: uki_addons.json
 
+%%SPECHWIDS%%
+
 Source200: check-kabi
 
 Source201: Module.kabi_aarch64
@@ -3173,6 +3175,12 @@ BuildKernel() {
 	    DevicetreeAuto="$DevicetreeAuto --devicetree-auto=$DtbPath/$i"
 	done
 
+	HwidPath=$(mktemp -d)
+	cp -a /usr/share/stubble/hwids/. "$HwidPath/"
+	for i in %{anatase_hwid_sources}; do
+	    cp "$RPM_SOURCE_DIR/$i" "$HwidPath/"
+	done
+
 	# os-release is unset, so that this is not seen as a full UKI by
 	# "kernel-install add" and instead is treated as a normal kernel image,
 	# causing kernel-install to generate an initrd + standard BLS cfg.
@@ -3180,7 +3188,8 @@ BuildKernel() {
 	# initramfs.
 	ukify build --linux=$(realpath $KernelImage) \
 	   --sbat=@dtbloader.sbat --os-release="" --uname=$KernelVer \
-	   --hwids=/usr/share/stubble/hwids $DevicetreeAuto --output=$DtbloaderImage
+	   --hwids="$HwidPath" $DevicetreeAuto --output=$DtbloaderImage
+	rm -rf "$HwidPath"
 
 %if %{signkernel}
 	%{log_msg "Sign the DTB-loader kernel"}
