@@ -809,6 +809,10 @@ sources-rh: $(TARBALL) $(KABI_TARBALL) $(KABIDW_TARBALL) generate-testpatch-tmp 
 		dtbloader.sbat.template \
 		dracut-virt.conf \
 		$(SOURCES)/
+	@if [ -d hwids ]; then \
+		find hwids -maxdepth 1 -type f -name '*.json' -print0 | \
+			LC_ALL=C sort -z | xargs -0 -r cp -t $(SOURCES)/; \
+	fi
 	@changelog_glob="$(SPECPACKAGE_NAME).changelog-$(RHEL_MAJOR).*[0-9]"; \
 	cat $$(ls -1 $$changelog_glob | sort -V -r) \
 		> $(SOURCES)/$(SPECPACKAGE_NAME).changelog
