@@ -6,6 +6,9 @@ CONFIG_IKCONFIG_PROC=y
 CONFIG_HID_8BITDO=m
 CONFIG_INPUT_FF_MEMLESS=y
 
+# Enabled by the ARM64 override for RP6
+# CONFIG_LEDS_HTR3212 is not set
+
 # Disable these due to conflict
 # CONFIG_HID_LENOVO_GO is not set
 # CONFIG_HID_LENOVO_GO_S is not set
