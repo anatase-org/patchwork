@@ -46,6 +46,28 @@ fi
 
 EVDIVERSION=$(sed -n 's/MODVER=[[:space:]]*//p' $TOPDIR/drivers/custom/evdi/module/Makefile)
 
+hwid_spec=$(mktemp)
+hwid_source_names=()
+while IFS= read -r hwid_source; do
+	hwid_source_names+=("$(basename "$hwid_source")")
+done < <(find "$TOPDIR/redhat/hwids" -maxdepth 1 -type f -name '*.json' -print 2>/dev/null | LC_ALL=C sort)
+
+printf '%%global anatase_hwid_sources %%{nil}' > "$hwid_spec"
+for hwid_source in "${hwid_source_names[@]}"; do
+	printf ' %s' "$hwid_source" >> "$hwid_spec"
+done
+printf '\n' >> "$hwid_spec"
+
+hwid_source_number=5000
+for hwid_source in "${hwid_source_names[@]}"; do
+	printf 'Source%d: %s\n' "$hwid_source_number" "$hwid_source" >> "$hwid_spec"
+	((hwid_source_number++))
+done
+
+sed -i -e "/%%SPECHWIDS%%/r $hwid_spec" \
+	-e '/%%SPECHWIDS%%/d' "$SOURCES/$SPECFILE"
+rm -f "$hwid_spec"
+
 # self-test begin
 test -f "$SOURCES/$SPECFILE" &&
 	sed -i -e "
