@@ -942,6 +942,11 @@
 
 	status = "okay";
 
+	battery@64 {
+		compatible = "samsung,galaxybook-ec-battery";
+		reg = <0x64>;
+	};
+
 	keyboard@5 {
 		compatible = "hid-over-i2c";
 		reg = <0x5>;
@@ -1057,17 +1062,6 @@
 		pinctrl-names = "default";
 
 		wakeup-source;
-	};
-};
-
-&i2c21 {
-	clock-frequency = <100000>;
-
-	status = "okay";
-
-	battery@b {
-		compatible = "sbs,sbs-battery";
-		reg = <0xb>;
 	};
 };
 
@@ -1554,6 +1548,7 @@
 	};
 };
 
+/* SE21 is programmed as UART by firmware; I2C 21 cannot drive a battery. */
 &uart21 {
 	compatible = "qcom,geni-debug-uart";
 	status = "okay";

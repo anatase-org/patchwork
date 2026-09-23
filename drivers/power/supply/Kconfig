@@ -229,6 +229,13 @@ config BATTERY_SAMSUNG_SDI
 	  Say Y to enable support for Samsung SDI battery data.
 	  These batteries are used in Samsung mobile phones.
 
+config BATTERY_SAMSUNG_GALAXYBOOK_EC
+	tristate "Samsung Galaxy Book4 Edge EC battery"
+	depends on I2C && OF
+	help
+	  Say Y here to report battery and AC adapter status from the Samsung
+	  EC mailbox on Galaxy Book4 Edge laptops with the SAM060B controller.
+
 config BATTERY_S2MU005
 	tristate "Samsung S2MU005 PMIC fuel gauge driver"
 	depends on I2C

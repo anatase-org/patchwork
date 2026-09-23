@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/power/supply/samsung,galaxybook-ec-battery.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Samsung Galaxy Book4 Edge EC battery
+
+maintainers:
+  - Antheas Kapenekakis <lkml@antheas.dev>
+
+description: |
+  The Samsung EC exposes battery and AC adapter status through a mailbox
+  on an I2C address listed in the machine ACPI ECTC resources.
+
+properties:
+  compatible:
+    const: samsung,galaxybook-ec-battery
+
+  reg:
+    maxItems: 1
+
+required:
+  - compatible
+  - reg
+
+additionalProperties: false
+
+examples:
+  - |
+    i2c {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        battery@64 {
+            compatible = "samsung,galaxybook-ec-battery";
+            reg = <0x64>;
+        };
+    };
+...
