@@ -1,0 +1,4 @@
+# Other touchscreens exposed by RP6 touchscreen enablement
+# CONFIG_TOUCHSCREEN_ADC is not set
+# CONFIG_TOUCHSCREEN_RASPBERRYPI_FW is not set
+# CONFIG_TOUCHSCREEN_TI_AM335X_TSC is not set
