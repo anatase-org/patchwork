@@ -32,6 +32,15 @@
 		serial1 = &uart14;
 	};
 
+	backlight: backlight {
+		compatible = "pwm-backlight";
+		pwms = <&pmk8550_pwm 0 416667>;
+		enable-gpios = <&pmc8380_3_gpios 4 GPIO_ACTIVE_HIGH>;
+
+		pinctrl-0 = <&edp_bl_en>, <&edp_bl_pwm>;
+		pinctrl-names = "default";
+	};
+
 	wcd938x: audio-codec {
 		compatible = "qcom,wcd9385-codec";
 
@@ -1074,12 +1083,9 @@
 		panel: panel {
 			compatible = "edp-panel";
 
-			enable-gpios = <&pmc8380_3_gpios 4 GPIO_ACTIVE_HIGH>;
+			backlight = <&backlight>;
 			power-supply = <&vreg_edp_3p3>;
 			no-hpd;
-
-			pinctrl-0 = <&edp_bl_en>;
-			pinctrl-names = "default";
 
 			port {
 				edp_panel_in: endpoint {
@@ -1164,6 +1170,17 @@
 		input-disable;
 		output-enable;
 	};
+};
+
+&pmk8550_gpios {
+	edp_bl_pwm: edp-bl-pwm-state {
+		pins = "gpio5";
+		function = "func3";
+	};
+};
+
+&pmk8550_pwm {
+	status = "okay";
 };
 
 &qupv3_0 {
