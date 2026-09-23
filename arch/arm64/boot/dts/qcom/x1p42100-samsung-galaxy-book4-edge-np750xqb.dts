@@ -995,11 +995,11 @@
 
 	status = "okay";
 
-	touchpad@50 {
+	touchpad@15 {
 		compatible = "hid-over-i2c";
-		reg = <0x50>;
+		reg = <0x15>;
 
-		hid-descr-addr = <0xd1>;
+		hid-descr-addr = <0x1>;
 		interrupts-extended = <&tlmm 3 IRQ_TYPE_LEVEL_LOW>;
 
 		vdd-supply = <&vreg_misc_3p3>;
