@@ -41,3 +41,7 @@ CONFIG_INPUT_FF_MEMLESS=y
 
 # Disable these for automotive configs
 # CONFIG_GPIO_QIXIS_FPGA is not set
+
+# CONFIG_BATTERY_ENE_KB9058 is not set
+# CONFIG_TYPEC_SAMSUNG_EMUEC is not set
+# CONFIG_LEDS_QCOM_LPG is not set
