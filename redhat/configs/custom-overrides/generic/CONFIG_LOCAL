@@ -40,3 +40,5 @@ CONFIG_INPUT_FF_MEMLESS=y
 
 # Disable these for automotive configs
 # CONFIG_GPIO_QIXIS_FPGA is not set
+
+# CONFIG_BATTERY_SAMSUNG_GALAXYBOOK_EC is not set
