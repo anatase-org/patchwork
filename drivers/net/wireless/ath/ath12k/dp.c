@@ -842,13 +842,16 @@ void ath12k_dp_pdev_free(struct ath12k_base *ab)
 
 	for (i = 0; i < ab->num_radios; i++) {
 		ar = ab->pdevs[i].ar;
-		rcu_assign_pointer(dp->dp_pdevs[ar->pdev_idx], NULL);
+		if (ar)
+			rcu_assign_pointer(dp->dp_pdevs[ar->pdev_idx], NULL);
 	}
 
 	synchronize_rcu();
 
-	for (i = 0; i < ab->num_radios; i++)
-		ath12k_dp_rx_pdev_free(ab, i);
+	for (i = 0; i < ab->num_radios; i++) {
+		if (ab->pdevs[i].ar)
+			ath12k_dp_rx_pdev_free(ab, i);
+	}
 }
 
 void ath12k_dp_pdev_pre_alloc(struct ath12k *ar)
