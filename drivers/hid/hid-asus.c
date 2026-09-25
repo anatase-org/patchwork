@@ -510,22 +510,6 @@ static int asus_raw_event(struct hid_device *hdev,
 	if (drvdata->quirks & QUIRK_ROG_NKEY_KEYBOARD) {
 		if (report->id == FEATURE_KBD_REPORT_ID) {
 			/*
-			 * Fn+F5 fan control key - try to send WMI event to toggle fan mode.
-			 * If successful, block the event from reaching userspace.
-			 * If asus-wmi is unavailable or the call fails, let the event
-			 * pass to userspace so it can implement its own fan control.
-			 */
-			if (data[1] == ASUS_FAN_CTRL_KEY_CODE) {
-				ret = asus_kbd_wmi_fan_send(drvdata, data, size);
-
-				/* if execution deferred successfully block event */
-				if (ret == 0)
-					return -1;
-
-				return ret;
-			}
-
-			/*
 			 * ASUS ROG laptops send these codes during normal operation
 			 * with no discernable reason. Filter them out to avoid
 			 * unmapped warning messages.
