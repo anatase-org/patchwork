@@ -207,6 +207,8 @@ awk '/^options[[:space:]]+/ { sub(/^options[[:space:]]+/, ""); cmdline=$0 }
 REMOTE_CMDLINE
 ) || die "failed to read the remote ostree kernel command line"
 [[ -n $CMDLINE ]] || die "remote ostree kernel command line is empty"
+# For our hacky luks unlock until TPM works
+CMDLINE+=" rd.luks.crypttab=0"
 echo "Using cmdline: $CMDLINE"
 
 UKIFY_ARGS=(build --efi-arch=aa64 "--stub=$EFI_STUB" \
