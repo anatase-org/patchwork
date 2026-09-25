@@ -22,6 +22,7 @@ CONFIG_INPUT_FF_MEMLESS=y
 # CONFIG_PWM_HTR3212 is not set
 
 # Disable these for all arches except x86
+# CONFIG_SENSORS_ZOTAC_ZONE_EC is not set
 # CONFIG_AMD_DPTC is not set
 # CONFIG_LEDS_VALVE is not set
 # CONFIG_AYN is not set
