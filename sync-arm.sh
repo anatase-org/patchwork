@@ -115,6 +115,18 @@ if command -v ccache >/dev/null; then
     MAKE_ARGS+=("CC=ccache ${CROSS_COMPILE}gcc" "HOSTCC=ccache gcc" "HOSTCXX=ccache g++")
 fi
 
+# Prepare the bootc overlay before building, so the device can reboot while
+# the local kernel build runs.
+ssh "$HOST" /bin/bash -s <<'REMOTE_OVERLAY'
+set -euo pipefail
+sudo -n true
+if ! sudo -n touch /usr/tst; then
+    sudo -n rpm-ostree usroverlay --hotfix
+    echo 'Applied the hotfix overlay; rebooting while the kernel builds.' >&2
+    sudo -n systemctl reboot --no-block
+fi
+REMOTE_OVERLAY
+
 mkdir -p "$ROOT/.sync-arm"
 if ! cmp -s "$ROOT/.config-arm" "$ROOT/.sync-arm/.input-config" || \
    ! grep -qx 'CONFIG_ARM64=y' "$ROOT/.config" 2>/dev/null; then
@@ -169,19 +181,6 @@ cp -a "$ROOT/redhat/hwids/." "$HWIDS_DIR/"
 SBAT_FILE=$STAGE_DIR/dtbloader.sbat
 sed -e "s/@KVER/$KNAME/g" -e 's/@SBAT_SUFFIX/rhel/g' \
     "$ROOT/redhat/dtbloader.sbat.template" > "$SBAT_FILE"
-
-# Prepare the bootc overlay only after the local build has succeeded. A first
-# run may need to reboot into the overlay; rerun the script afterwards.
-ssh "$HOST" /bin/bash -s <<'REMOTE_OVERLAY'
-set -euo pipefail
-sudo -n true
-if ! sudo -n touch /usr/tst; then
-    sudo -n rpm-ostree usroverlay --hotfix
-    echo 'Applied the hotfix overlay; rebooting. Rerun sync-arm.sh afterwards.' >&2
-    sudo -n systemctl reboot --no-block
-    exit 1
-fi
-REMOTE_OVERLAY
 
 rsync -rv --delete --rsync-path='sudo -n rsync' \
     "$STAGE_DIR/lib/modules/$KNAME/" "$HOST:/lib/modules/$KNAME/"
