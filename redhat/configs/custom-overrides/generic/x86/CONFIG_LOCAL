@@ -84,8 +84,9 @@ CONFIG_AMD_PRIVATE_COLOR=y
 # Loki MiniPro and Ayaneo Audio
 CONFIG_SND_SOC_AW87XXX=m
 
-# Add Ayaneo EC
+# Handheld EC drivers
 CONFIG_AYANEO_EC=m
+CONFIG_SENSORS_ZOTAC_ZONE_EC=m
 
 # These are required to satisfy automotive/rt configs
 # CONFIG_GAMEPORT_EMU10K1 is not set
