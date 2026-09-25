@@ -2733,6 +2733,16 @@ config SENSORS_YOGAFAN
 	  This driver can also be built as a module. If so, the module
 	  will be called yogafan.
 
+config SENSORS_ZOTAC_ZONE_EC
+	tristate "Zotac ZONE fan monitoring and control"
+	depends on X86 && DMI && HAS_IOPORT
+	help
+	  Enables fan speed, temperature, and automatic or manual fan control
+	  through the embedded controller on Zotac ZONE handhelds.
+
+	  This driver can also be built as a module. If so, the module
+	  will be called zotac-zone-ec.
+
 config SENSORS_INTEL_M10_BMC_HWMON
 	tristate "Intel MAX10 BMC Hardware Monitoring"
 	depends on MFD_INTEL_M10_BMC_CORE
