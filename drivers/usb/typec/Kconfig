@@ -88,6 +88,18 @@ config TYPEC_HD3SS3220
 	  If you choose to build this driver as a dynamically linked module, the
 	  module will be called hd3ss3220.ko.
 
+config TYPEC_S2MM006
+	tristate "Samsung S2MM006 Type-C controller"
+	depends on I2C && OF
+	help
+	  Support the Samsung S2MM006 USB Type-C controllers in the Galaxy Book4
+	  Edge NP750XQB. The driver enables the consumer power path for charging
+	  and the provider path for USB host devices after an attach. It exposes
+	  raw status in debugfs when available. It does not yet select a USB Power
+	  Delivery contract or control USB data roles.
+
+	  If built as a module, the module is called s2mm006.
+
 config TYPEC_STUSB160X
 	tristate "STMicroelectronics STUSB160x Type-C controller driver"
 	depends on USB_ROLE_SWITCH || !USB_ROLE_SWITCH
