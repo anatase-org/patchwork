@@ -872,6 +872,7 @@
 		compatible = "samsung,np750xqb-kb9058-battery",
 			     "ene,kb9058-battery";
 		reg = <0x64>;
+		interrupts-extended = <&tlmm 66 IRQ_TYPE_EDGE_FALLING>;
 	};
 
 	keyboard@5 {
