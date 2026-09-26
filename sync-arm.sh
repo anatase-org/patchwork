@@ -128,11 +128,6 @@ fi
 REMOTE_OVERLAY
 
 mkdir -p "$ROOT/.sync-arm"
-if ! cmp -s "$ROOT/.config-arm" "$ROOT/.sync-arm/.input-config" || \
-   ! grep -qx 'CONFIG_ARM64=y' "$ROOT/.config" 2>/dev/null; then
-    cp "$ROOT/.config-arm" "$ROOT/.config"
-    cp "$ROOT/.config-arm" "$ROOT/.sync-arm/.input-config"
-fi
 
 # Give a stock config a distinct module directory without modifying the input.
 if grep -qx 'CONFIG_LOCALVERSION=""' "$ROOT/.config"; then
