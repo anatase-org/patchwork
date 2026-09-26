@@ -1023,6 +1023,27 @@
 	};
 };
 
+/* The two S2MM006 USB-C controllers are at 0x33 on these buses. */
+&i2c9 {
+	clock-frequency = <400000>;
+	status = "okay";
+
+	pdic@33 {
+		compatible = "samsung,s2mm006";
+		reg = <0x33>;
+	};
+};
+
+&i2c15 {
+	clock-frequency = <400000>;
+	status = "okay";
+
+	pdic@33 {
+		compatible = "samsung,s2mm006";
+		reg = <0x33>;
+	};
+};
+
 &i2c18 {
 	clock-frequency = <400000>;
 
@@ -1041,6 +1062,12 @@
 		pinctrl-0 = <&eusb6_reset_n>;
 		pinctrl-names = "default";
 	};
+};
+
+/* The ISL9238-family charger and SBS battery use 0x09 and 0x0b on this bus. */
+&i2c20 {
+	clock-frequency = <100000>;
+	status = "okay";
 };
 
 &i2c13 {
