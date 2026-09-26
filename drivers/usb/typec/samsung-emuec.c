@@ -20,27 +20,47 @@
 #include <linux/slab.h>
 #include <linux/unaligned.h>
 #include <linux/usb/pd.h>
+#include <linux/usb/pd_vdo.h>
 #include <linux/usb/role.h>
 #include <linux/usb/typec.h>
 #include <linux/usb/typec_altmode.h>
+#include <linux/usb/typec_dp.h>
+#include <linux/usb/typec_mux.h>
+#include <linux/usb/typec_retimer.h>
 #include <linux/workqueue.h>
+
+#include <drm/drm_bridge.h>
 
 #define S2MM006_IRQ_FIRST		0x02
 #define S2MM006_IRQ_LAST		0x07
 #define S2MM006_REG_BC_STATUS		0x0e
 #define S2MM006_REG_CC_STATUS		0x11
 #define S2MM006_REG_PD_STATUS2		0x14
+#define S2MM006_REG_PD_STATUS3		0x1a
 #define S2MM006_REG_SWITCH_STATUS	0x1c
 #define S2MM006_REG_SWITCH_COMMAND	0x4e
 #define S2MM006_REG_TX_STATUS		0x50
+#define S2MM006_REG_DP_PIN_ASSIGN	0x51
 #define S2MM006_REG_ENTER_USB_STATUS	0x56
 #define S2MM006_REG_TX_BUFFER		0x80
 #define S2MM006_REG_ACTIVE_RDO		0x6a4
 #define S2MM006_REG_SOURCE_CAPS		0x900
+#define S2MM006_REG_DISCOVER_SVID	0xa20
+#define S2MM006_REG_DISCOVER_MODE	0xa40
+#define S2MM006_REG_ENTER_MODE		0xa60
+#define S2MM006_REG_DP_ATTENTION	0xaa0
+#define S2MM006_REG_DP_STATUS		0xac0
+#define S2MM006_REG_DP_CONFIGURE	0xae0
 
 #define S2MM006_CONSUMER_COMMAND	0x12
 #define S2MM006_PROVIDER_COMMAND	0x09
 #define S2MM006_TX_REQUEST		BIT(6)
+#define S2MM006_TX_CONTINUE_ALT		BIT(1)
+#define S2MM006_DP_MODE_RECEIVED	BIT(2)
+#define S2MM006_DP_ENTER_RECEIVED	BIT(3)
+#define S2MM006_DP_STATUS_RECEIVED	BIT(5)
+#define S2MM006_DP_CONFIG_RECEIVED	BIT(6)
+#define S2MM006_DP_ATTENTION_RECEIVED	BIT(7)
 #define S2MM006_ENTER_USB_SUCCESS	(2 << 2)
 #define S2MM006_MAX_CHARGE_MW		65000
 #define S2MM006_MAX_CHARGE_MV		20000
@@ -55,13 +75,18 @@ struct samsung_emuec {
 	struct i2c_client *client;
 	struct mutex lock;
 	struct delayed_work work;
+	struct work_struct hpd_work;
 	struct device_node *connector;
+	struct drm_bridge *dp_bridge;
 	struct typec_port *port;
 	struct typec_partner *partner;
 	struct usb_power_delivery *pd;
 	struct usb_power_delivery *partner_pd;
 	struct usb_power_delivery_capabilities *source_caps;
 	struct usb_role_switch *role_sw;
+	struct typec_mux *mux;
+	struct typec_retimer *retimer;
+	struct typec_altmode dp_alt;
 	struct power_supply *psy;
 	struct power_supply_desc psy_desc;
 	enum samsung_emuec_mode attempted_mode;
@@ -74,6 +99,10 @@ struct samsung_emuec {
 	u32 current_ua;
 	bool attached;
 	bool usb_mux_active;
+	bool dp_active;
+	bool dp_enter_requested;
+	bool dp_hpd;
+	u8 dp_pin;
 	bool pd_attempted;
 	u8 caps_retries;
 };
@@ -194,8 +223,27 @@ static void samsung_emuec_unregister_partner(struct samsung_emuec *pdic)
 	}
 }
 
+static int samsung_emuec_set_mux(struct samsung_emuec *pdic,
+				struct typec_mux_state *state)
+{
+	struct typec_retimer_state retimer_state = {
+		.alt = state->alt,
+		.mode = state->mode,
+		.data = state->data,
+	};
+	int ret;
+
+	ret = typec_retimer_set(pdic->retimer, &retimer_state);
+	if (ret)
+		return ret;
+
+	return typec_mux_set(pdic->mux, state);
+}
+
 static void samsung_emuec_detach(struct samsung_emuec *pdic)
 {
+	struct typec_mux_state mux_state = { .mode = TYPEC_STATE_SAFE };
+
 	if (!pdic->attached && pdic->attempted_mode == SAMSUNG_EMUEC_MODE_NONE)
 		return;
 
@@ -204,7 +252,7 @@ static void samsung_emuec_detach(struct samsung_emuec *pdic)
 		pdic->usb_role = USB_ROLE_NONE;
 		typec_set_orientation(pdic->port, TYPEC_ORIENTATION_NONE);
 		pdic->orientation = TYPEC_ORIENTATION_NONE;
-		typec_set_mode(pdic->port, TYPEC_STATE_SAFE);
+		samsung_emuec_set_mux(pdic, &mux_state);
 		pdic->usb_mux_active = false;
 		typec_port_set_usb_mode(pdic->port, USB_MODE_NONE);
 		typec_set_pwr_opmode(pdic->port, TYPEC_PWR_MODE_USB);
@@ -212,6 +260,13 @@ static void samsung_emuec_detach(struct samsung_emuec *pdic)
 	}
 
 	pdic->attached = false;
+	pdic->dp_active = false;
+	pdic->dp_enter_requested = false;
+	if (pdic->dp_hpd) {
+		WRITE_ONCE(pdic->dp_hpd, false);
+		schedule_work(&pdic->hpd_work);
+	}
+	pdic->dp_pin = 0;
 	pdic->pd_attempted = false;
 	pdic->usb_mode = USB_MODE_NONE;
 	pdic->caps_retries = 0;
@@ -233,7 +288,7 @@ static int samsung_emuec_read_source_caps(struct samsung_emuec *pdic,
 				buf, sizeof(buf));
 	if (ret)
 		return ret;
-	
+
 	header = get_unaligned_le16(buf);
 	*count = pd_header_cnt(header);
 
@@ -424,10 +479,267 @@ static void samsung_emuec_update_pd(struct samsung_emuec *pdic)
 		 mv, ma, actual);
 }
 
+static int samsung_emuec_read_vdm(struct samsung_emuec *pdic, u16 reg,
+				  u16 svid, u8 command, u8 command_type,
+				  u32 *data)
+{
+	u8 buf[12];
+	u32 vdm;
+	u16 header;
+	int ret;
+
+	ret = samsung_emuec_read(pdic, reg, buf, sizeof(buf));
+	if (ret)
+		return ret;
+
+	header = get_unaligned_le16(buf);
+	vdm = get_unaligned_le32(buf + 4);
+	if (pd_header_type(header) != PD_DATA_VENDOR_DEF ||
+	    pd_header_cnt(header) < (data ? 2 : 1) ||
+	    PD_VDO_VID(vdm) != svid || !PD_VDO_SVDM(vdm) ||
+	    PD_VDO_CMD(vdm) != command || PD_VDO_CMDT(vdm) != command_type)
+		return -ENODATA;
+
+	if (data)
+		*data = get_unaligned_le32(buf + 8);
+
+	return 0;
+}
+
+static u8 samsung_emuec_choose_dp_pin(u32 mode, u32 status)
+{
+	u8 pins = DP_CAP_PIN_ASSIGN_UFP_D(mode);
+
+	if (DP_STATUS_CONNECTION(status) != DP_STATUS_CON_UFP_D &&
+	    DP_STATUS_CONNECTION(status) != DP_STATUS_CON_BOTH)
+		return 0;
+
+	if (status & DP_STATUS_PREFER_MULTI_FUNC) {
+		if (pins & BIT(DP_PIN_ASSIGN_D))
+			return DP_PIN_ASSIGN_D;
+		if (pins & BIT(DP_PIN_ASSIGN_F))
+			return DP_PIN_ASSIGN_F;
+	}
+	if (pins & BIT(DP_PIN_ASSIGN_C))
+		return DP_PIN_ASSIGN_C;
+	if (pins & BIT(DP_PIN_ASSIGN_E))
+		return DP_PIN_ASSIGN_E;
+	if (pins & BIT(DP_PIN_ASSIGN_D))
+		return DP_PIN_ASSIGN_D;
+
+	return 0;
+}
+
+static void samsung_emuec_update_dp(struct samsung_emuec *pdic)
+{
+	struct typec_displayport_data dp_data = {};
+	struct typec_mux_state mux_state = {};
+	u32 svids, mode, dp_status, hpd_status;
+	u8 events, control, pin_reg, pin;
+	bool initial, update_hpd, hpd;
+	int ret;
+
+	if (pdic->data_role != TYPEC_HOST)
+		return;
+
+	ret = samsung_emuec_read(pdic, S2MM006_REG_PD_STATUS3,
+				&events, sizeof(events));
+	if (ret)
+		return;
+
+	/* Windows clears the latched events before reading responses. */
+	if (events) {
+		control = 0;
+		ret = samsung_emuec_write(pdic, S2MM006_REG_PD_STATUS3,
+					  &control, sizeof(control));
+		if (ret)
+			return;
+	}
+
+	/* On boot, the firmware may have completed DP negotiation before probe. */
+	initial = !pdic->dp_active;
+
+	ret = samsung_emuec_read_vdm(pdic, S2MM006_REG_DISCOVER_SVID,
+				      USB_SID_PD, CMD_DISCOVER_SVID,
+				      CMDT_RSP_ACK, &svids);
+	if (ret || (PD_VDO_SVID_SVID0(svids) != USB_TYPEC_DP_SID &&
+		    PD_VDO_SVID_SVID1(svids) != USB_TYPEC_DP_SID))
+		return;
+
+	ret = samsung_emuec_read_vdm(pdic, S2MM006_REG_DISCOVER_MODE,
+				      USB_TYPEC_DP_SID, CMD_DISCOVER_MODES,
+				      CMDT_RSP_ACK, &mode);
+	if (ret)
+		return;
+
+	ret = samsung_emuec_read_vdm(pdic, S2MM006_REG_ENTER_MODE,
+				      USB_TYPEC_DP_SID, CMD_ENTER_MODE,
+				      CMDT_RSP_ACK, NULL);
+
+	if (ret) {
+		if (!(events & S2MM006_DP_MODE_RECEIVED) ||
+		    pdic->dp_enter_requested)
+			return;
+
+		ret = samsung_emuec_read(pdic, S2MM006_REG_TX_STATUS,
+					 &control, sizeof(control));
+		if (ret)
+			return;
+		control |= S2MM006_TX_CONTINUE_ALT;
+		ret = samsung_emuec_write(pdic, S2MM006_REG_TX_STATUS,
+					  &control, sizeof(control));
+		if (ret)
+			return;
+		pdic->dp_enter_requested = true;
+
+		mod_delayed_work(system_dfl_wq, &pdic->work,
+				 msecs_to_jiffies(150));
+		return;
+	}
+
+	ret = samsung_emuec_read_vdm(pdic, S2MM006_REG_DP_STATUS,
+				      USB_TYPEC_DP_SID, DP_CMD_STATUS_UPDATE,
+				      CMDT_RSP_ACK, &dp_status);
+	if (ret)
+		return;
+
+	pin = samsung_emuec_choose_dp_pin(mode, dp_status);
+	if (!pin)
+		return;
+
+	ret = samsung_emuec_read(pdic, S2MM006_REG_DP_PIN_ASSIGN,
+				&pin_reg, sizeof(pin_reg));
+	if (ret)
+		return;
+
+	if ((pin_reg & GENMASK(2, 0)) != pin) {
+		if (!(events & S2MM006_DP_STATUS_RECEIVED))
+			return;
+		pin_reg = (pin_reg & ~GENMASK(2, 0)) | pin;
+
+		ret = samsung_emuec_write(pdic, S2MM006_REG_DP_PIN_ASSIGN,
+					  &pin_reg, sizeof(pin_reg));
+		if (ret)
+			return;
+
+		mod_delayed_work(system_dfl_wq, &pdic->work,
+				 msecs_to_jiffies(150));
+		return;
+	}
+
+	ret = samsung_emuec_read_vdm(pdic, S2MM006_REG_DP_CONFIGURE,
+				      USB_TYPEC_DP_SID, DP_CMD_CONFIGURE,
+				      CMDT_RSP_ACK, NULL);
+	if (ret)
+		return;
+
+	dp_data.status = dp_status;
+	dp_data.conf = DP_CONF_UFP_U_AS_UFP_D |
+		       DP_CONF_SET_PIN_ASSIGN(BIT(pin));
+	update_hpd = !pdic->dp_active ||
+		     (events & S2MM006_DP_STATUS_RECEIVED);
+
+	if (!pdic->dp_active || pdic->dp_pin != pin) {
+		mux_state.alt = &pdic->dp_alt;
+		mux_state.mode = TYPEC_MODAL_STATE(pin);
+		mux_state.data = &dp_data;
+		ret = samsung_emuec_set_mux(pdic, &mux_state);
+		if (ret) {
+			dev_warn(&pdic->client->dev,
+				 "failed to enable DisplayPort mux: %d\n", ret);
+			return;
+		}
+		pdic->dp_active = true;
+		pdic->dp_enter_requested = false;
+		pdic->dp_pin = pin;
+		dev_info(&pdic->client->dev,
+			 "DisplayPort Alt Mode configured with pin %c\n", 'A' + pin);
+	}
+
+	/* Attention also preserves HPD changes that happened before probe. */
+	hpd_status = dp_status;
+	if (initial || (events & S2MM006_DP_ATTENTION_RECEIVED)) {
+		ret = samsung_emuec_read_vdm(pdic, S2MM006_REG_DP_ATTENTION,
+					      USB_TYPEC_DP_SID, CMD_ATTENTION,
+					      CMDT_INIT, &hpd_status);
+		if (ret && (events & S2MM006_DP_ATTENTION_RECEIVED))
+			return;
+		if (!ret)
+			update_hpd = true;
+	}
+
+	hpd = hpd_status & DP_STATUS_HPD_STATE;
+	if (update_hpd && pdic->dp_hpd != hpd) {
+		WRITE_ONCE(pdic->dp_hpd, hpd);
+		schedule_work(&pdic->hpd_work);
+	}
+}
+
+struct samsung_emuec_dp_bridge {
+	struct drm_bridge bridge;
+	struct samsung_emuec *pdic;
+};
+
+static void samsung_emuec_hpd_work(struct work_struct *work)
+{
+	struct samsung_emuec *pdic = container_of(work, struct samsung_emuec,
+						   hpd_work);
+
+	drm_bridge_hpd_notify(pdic->dp_bridge,
+			      READ_ONCE(pdic->dp_hpd) ?
+			      connector_status_connected :
+			      connector_status_disconnected);
+}
+
+static void samsung_emuec_bridge_hpd_enable(struct drm_bridge *bridge)
+{
+	struct samsung_emuec_dp_bridge *dp_bridge =
+		container_of(bridge, struct samsung_emuec_dp_bridge, bridge);
+
+	if (READ_ONCE(dp_bridge->pdic->dp_hpd))
+		schedule_work(&dp_bridge->pdic->hpd_work);
+}
+
+static int samsung_emuec_bridge_attach(struct drm_bridge *bridge,
+				       struct drm_encoder *encoder,
+				       enum drm_bridge_attach_flags flags)
+{
+	return flags & DRM_BRIDGE_ATTACH_NO_CONNECTOR ? 0 : -EINVAL;
+}
+
+static const struct drm_bridge_funcs samsung_emuec_bridge_funcs = {
+	.attach = samsung_emuec_bridge_attach,
+	.hpd_enable = samsung_emuec_bridge_hpd_enable,
+};
+
+static int samsung_emuec_register_bridge(struct samsung_emuec *pdic)
+{
+	struct device *dev = &pdic->client->dev;
+	struct samsung_emuec_dp_bridge *dp_bridge;
+	struct drm_bridge *bridge;
+
+	dp_bridge = devm_drm_bridge_alloc(dev, struct samsung_emuec_dp_bridge,
+					   bridge, &samsung_emuec_bridge_funcs);
+	if (IS_ERR(dp_bridge))
+		return PTR_ERR(dp_bridge);
+
+	dp_bridge->pdic = pdic;
+	bridge = &dp_bridge->bridge;
+	bridge->of_node = pdic->connector;
+	bridge->type = DRM_MODE_CONNECTOR_DisplayPort;
+	bridge->ops = DRM_BRIDGE_OP_HPD;
+	bridge->interlace_allowed = true;
+	bridge->ycbcr_420_allowed = true;
+	pdic->dp_bridge = bridge;
+
+	return devm_drm_bridge_add(dev, bridge);
+}
+
 static void samsung_emuec_sync(struct work_struct *work)
 {
 	struct samsung_emuec *pdic = container_of(to_delayed_work(work),
 						    struct samsung_emuec, work);
+	struct typec_mux_state mux_state = { .mode = TYPEC_STATE_USB };
 	u8 command, status_bit, bc, cc, pd, sw, enter_usb;
 	struct typec_partner_desc partner_desc = {
 		.accessory = TYPEC_ACCESSORY_NONE,
@@ -437,6 +749,7 @@ static void samsung_emuec_sync(struct work_struct *work)
 	enum typec_orientation orientation;
 	enum typec_role power_role;
 	enum typec_data_role data_role;
+	enum usb_role usb_role;
 	bool vbus_present, source_path_attached, consumer_path_active;
 	int ret;
 
@@ -468,7 +781,6 @@ static void samsung_emuec_sync(struct work_struct *work)
 	source_path_attached = bc & BIT(4);
 	consumer_path_active = sw & BIT(1);
 
-	/* A missing attach indication or CC orientation means a disconnect. */
 	if (orientation == TYPEC_ORIENTATION_NONE ||
 	    (!vbus_present && !source_path_attached)) {
 		samsung_emuec_detach(pdic);
@@ -542,8 +854,8 @@ static void samsung_emuec_sync(struct work_struct *work)
 			pdic->orientation = orientation;
 	}
 
-	if (!pdic->usb_mux_active) {
-		ret = typec_set_mode(pdic->port, TYPEC_STATE_USB);
+	if (!pdic->usb_mux_active && !pdic->dp_active) {
+		ret = samsung_emuec_set_mux(pdic, &mux_state);
 		if (ret)
 			dev_warn(&pdic->client->dev,
 				 "failed to enable USB mux: %d\n", ret);
@@ -566,11 +878,19 @@ static void samsung_emuec_sync(struct work_struct *work)
 		pdic->usb_mode = USB_MODE_NONE;
 	}
 
-	if (pdic->usb_role != (data_role == TYPEC_HOST ? USB_ROLE_HOST :
-							       USB_ROLE_DEVICE)) {
-		enum usb_role usb_role = data_role == TYPEC_HOST ?
-					USB_ROLE_HOST : USB_ROLE_DEVICE;
+	samsung_emuec_update_dp(pdic);
 
+	/* The DWC3 host timed out when started with this PHY in four-lane DP. */
+	usb_role = USB_ROLE_NONE;
+	if (data_role == TYPEC_DEVICE)
+		usb_role = USB_ROLE_DEVICE;
+	else if (!pdic->dp_enter_requested &&
+		 !(pdic->dp_active &&
+		   (pdic->dp_pin == DP_PIN_ASSIGN_C ||
+		    pdic->dp_pin == DP_PIN_ASSIGN_E)))
+		usb_role = USB_ROLE_HOST;
+
+	if (pdic->usb_role != usb_role) {
 		ret = usb_role_switch_set_role(pdic->role_sw, usb_role);
 		if (ret)
 			dev_warn(&pdic->client->dev,
@@ -581,6 +901,10 @@ static void samsung_emuec_sync(struct work_struct *work)
 
 	if (power_role == TYPEC_SINK && consumer_path_active)
 		samsung_emuec_update_pd(pdic);
+
+	if (pdic->dp_active)
+		mod_delayed_work(system_dfl_wq, &pdic->work,
+				 msecs_to_jiffies(500));
 }
 
 static irqreturn_t samsung_emuec_irq_thread(int irq, void *data)
@@ -629,8 +953,12 @@ static int samsung_emuec_probe(struct i2c_client *client)
 		return -ENOMEM;
 
 	pdic->client = client;
+	pdic->dp_alt.svid = USB_TYPEC_DP_SID;
+	pdic->dp_alt.mode = USB_TYPEC_DP_MODE;
+	pdic->dp_alt.active = 1;
 	mutex_init(&pdic->lock);
 	INIT_DELAYED_WORK(&pdic->work, samsung_emuec_sync);
+	INIT_WORK(&pdic->hpd_work, samsung_emuec_hpd_work);
 	i2c_set_clientdata(client, pdic);
 
 	ret = samsung_emuec_read(pdic, S2MM006_REG_SWITCH_STATUS,
@@ -655,10 +983,26 @@ static int samsung_emuec_probe(struct i2c_client *client)
 		goto err_node;
 	}
 
+	pdic->mux = fwnode_typec_mux_get(typec_cap.fwnode);
+	if (IS_ERR(pdic->mux)) {
+		ret = PTR_ERR(pdic->mux);
+		goto err_role;
+	}
+
+	pdic->retimer = fwnode_typec_retimer_get(typec_cap.fwnode);
+	if (IS_ERR(pdic->retimer)) {
+		ret = PTR_ERR(pdic->retimer);
+		goto err_mux;
+	}
+	if (!pdic->mux && !pdic->retimer) {
+		ret = -ENODEV;
+		goto err_retimer;
+	}
+
 	pdic->port = typec_register_port(dev, &typec_cap);
 	if (IS_ERR(pdic->port)) {
 		ret = PTR_ERR(pdic->port);
-		goto err_role;
+		goto err_retimer;
 	}
 
 	pdic->pd = usb_power_delivery_register(dev, &pd_desc);
@@ -695,6 +1039,10 @@ static int samsung_emuec_probe(struct i2c_client *client)
 	if (ret)
 		goto err_pd;
 
+	ret = samsung_emuec_register_bridge(pdic);
+	if (ret)
+		goto err_pd;
+
 	ret = devm_request_threaded_irq(dev, client->irq, NULL,
 					samsung_emuec_irq_thread, IRQF_ONESHOT,
 					dev_name(dev), pdic);
@@ -709,6 +1057,10 @@ err_pd:
 	usb_power_delivery_unregister(pdic->pd);
 err_port:
 	typec_unregister_port(pdic->port);
+err_retimer:
+	typec_retimer_put(pdic->retimer);
+err_mux:
+	typec_mux_put(pdic->mux);
 err_role:
 	usb_role_switch_put(pdic->role_sw);
 err_node:
@@ -725,10 +1077,13 @@ static void samsung_emuec_remove(struct i2c_client *client)
 
 	scoped_guard(mutex, &pdic->lock)
 		samsung_emuec_detach(pdic);
+	flush_work(&pdic->hpd_work);
 
 	typec_port_set_usb_power_delivery(pdic->port, NULL);
 	usb_power_delivery_unregister(pdic->pd);
 	typec_unregister_port(pdic->port);
+	typec_retimer_put(pdic->retimer);
+	typec_mux_put(pdic->mux);
 	usb_role_switch_put(pdic->role_sw);
 	of_node_put(pdic->connector);
 }
