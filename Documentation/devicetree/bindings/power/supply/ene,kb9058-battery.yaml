@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/power/supply/ene,kb9058-battery.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: ENE KB9058 embedded controller battery interface
+
+maintainers:
+  - Antheas Kapenekakis <lkml@antheas.dev>
+
+description: |
+  The ENE KB9058 embedded controller exposes battery and AC adapter status
+  through a mailbox at its second I2C address. The register layout follows
+  the Samsung Galaxy Book4 Edge ACPI battery methods.
+
+properties:
+  compatible:
+    items:
+      - const: samsung,np750xqb-kb9058-battery
+      - const: ene,kb9058-battery
+
+  reg:
+    maxItems: 1
+
+required:
+  - compatible
+  - reg
+
+additionalProperties: false
+
+examples:
+  - |
+    i2c {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        embedded-controller@64 {
+            compatible = "samsung,np750xqb-kb9058-battery",
+                         "ene,kb9058-battery";
+            reg = <0x64>;
+        };
+    };
+...
