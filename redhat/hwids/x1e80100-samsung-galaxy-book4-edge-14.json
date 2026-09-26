@@ -1,0 +1,11 @@
+{
+    "type": "devicetree",
+    "name": "Samsung Galaxy Book4 Edge (14 inch)",
+    "compatible": "samsung,galaxy-book4-edge-14",
+    "hwids": [
+        "1134be11-c352-5b99-bb8f-e3076c73d90a",
+        "6a6266d0-71c6-5129-aba2-360216be72d5",
+        "07c1a3c2-3e0c-5ca9-ae8d-0504652f000e",
+        "89a7830f-2265-5a84-bb22-bba79d08cab7"
+    ]
+}
