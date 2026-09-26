@@ -89,14 +89,14 @@ config TYPEC_HD3SS3220
 	  module will be called hd3ss3220.ko.
 
 config TYPEC_SAMSUNG_EMUEC
-	tristate "Samsung EmuEC Type-C power path"
-	depends on I2C && OF
+	tristate "Samsung EmuEC Type-C controller"
+	depends on I2C && OF && POWER_SUPPLY && USB_ROLE_SWITCH
 	help
 	  Support the S2MM006 USB Type-C controllers managed by Samsung's EmuEC
-	  software on the Galaxy Book4 Edge NP750XQB. The driver enables the
-	  consumer power path for charging and the provider path for USB host
-	  devices after an attach. It does not yet select a USB Power Delivery
-	  contract or control USB data roles.
+	  software on the Galaxy Book4 Edge NP750XQB. The driver reports Type-C
+	  attachment and roles, controls the power and USB data paths, and selects
+	  a fixed USB Power Delivery sink contract through the controller firmware.
+	  USB4 link establishment also requires a Qualcomm host-router driver.
 
 	  If built as a module, the module is called samsung-emuec.
 
