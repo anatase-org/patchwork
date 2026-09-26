@@ -11,9 +11,9 @@ maintainers:
   - Antheas Kapenekakis <lkml@antheas.dev>
 
 description: |
-  The S2MM006 controls the USB Type-C power path on the Samsung Galaxy Book4
-  Edge NP750XQB. The firmware exposes the connector and its USB data links
-  separately through Qualcomm PMIC GLINK.
+  The S2MM006 controls Type-C attachment, power paths and USB Power Delivery
+  on the Samsung Galaxy Book4 Edge NP750XQB. Its connector describes the USB
+  data role, orientation and mode switch connections.
 
 properties:
   compatible:
@@ -25,10 +25,14 @@ properties:
   interrupts:
     maxItems: 1
 
+  connector:
+    $ref: /schemas/connector/usb-connector.yaml#
+
 required:
   - compatible
   - reg
   - interrupts
+  - connector
 
 additionalProperties: false
 
@@ -45,6 +49,12 @@ examples:
             reg = <0x33>;
             interrupt-parent = <&gpio0>;
             interrupts = <42 IRQ_TYPE_LEVEL_LOW>;
+
+            connector {
+                compatible = "usb-c-connector";
+                power-role = "dual";
+                data-role = "dual";
+            };
         };
     };
 ...
