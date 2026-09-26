@@ -219,8 +219,6 @@ static enum power_supply_property kb9058_battery_properties[] = {
 	POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_CYCLE_COUNT,
-	POWER_SUPPLY_PROP_MODEL_NAME,
-	POWER_SUPPLY_PROP_MANUFACTURER,
 };
 
 static int kb9058_battery_get_property(struct power_supply *psy,
@@ -270,13 +268,6 @@ static int kb9058_battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
 		value = data->cycle_count;
 		break;
-	case POWER_SUPPLY_PROP_MODEL_NAME:
-		/* BATC._BIX supplies this fixed model string. */
-		val->strval = "SR Real Battery";
-		return 0;
-	case POWER_SUPPLY_PROP_MANUFACTURER:
-		val->strval = "SAMSUNG Electronics";
-		return 0;
 	default:
 		return -EINVAL;
 	}
