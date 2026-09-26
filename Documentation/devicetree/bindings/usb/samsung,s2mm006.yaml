@@ -22,14 +22,20 @@ properties:
   reg:
     maxItems: 1
 
+  interrupts:
+    maxItems: 1
+
 required:
   - compatible
   - reg
+  - interrupts
 
 additionalProperties: false
 
 examples:
   - |
+    #include <dt-bindings/interrupt-controller/irq.h>
+
     i2c {
         #address-cells = <1>;
         #size-cells = <0>;
@@ -37,6 +43,8 @@ examples:
         pdic@33 {
             compatible = "samsung,s2mm006";
             reg = <0x33>;
+            interrupt-parent = <&gpio0>;
+            interrupts = <42 IRQ_TYPE_LEVEL_LOW>;
         };
     };
 ...

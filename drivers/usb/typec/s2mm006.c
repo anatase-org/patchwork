@@ -13,18 +13,15 @@
  */
 
 #include <linux/bitops.h>
-#include <linux/debugfs.h>
 #include <linux/errno.h>
 #include <linux/i2c.h>
-#include <linux/jiffies.h>
+#include <linux/interrupt.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/seq_file.h>
 #include <linux/slab.h>
-#include <linux/workqueue.h>
 
-#define S2MM006_STATUS_FIRST	0x0e
-#define S2MM006_STATUS_LAST	0x1c
+#define S2MM006_IRQ_FIRST	0x02
+#define S2MM006_IRQ_LAST	0x07
 #define S2MM006_REG_BC_STATUS	0x0e
 #define S2MM006_REG_ATTACH	0x11
 #define S2MM006_REG_VBUS	0x14
@@ -32,7 +29,6 @@
 #define S2MM006_REG_SWITCH_COMMAND	0x4e
 #define S2MM006_CONSUMER_COMMAND	0x12
 #define S2MM006_PROVIDER_COMMAND	0x09
-#define S2MM006_MONITOR_MS		500
 
 enum s2mm006_mode {
 	S2MM006_MODE_NONE,
@@ -42,8 +38,6 @@ enum s2mm006_mode {
 
 struct s2mm006 {
 	struct i2c_client *client;
-	struct dentry *debugfs;
-	struct delayed_work monitor;
 	enum s2mm006_mode attempted_mode;
 };
 
@@ -89,10 +83,31 @@ static int s2mm006_write(struct s2mm006 *pdic, u16 reg, u8 value)
 	return 0;
 }
 
-static void s2mm006_monitor(struct work_struct *work)
+static int s2mm006_clear_irqs(struct s2mm006 *pdic)
 {
-	struct s2mm006 *pdic = container_of(to_delayed_work(work),
-					    struct s2mm006, monitor);
+	u8 pending[S2MM006_IRQ_LAST - S2MM006_IRQ_FIRST + 1];
+	int reg, ret;
+
+	for (reg = S2MM006_IRQ_FIRST; reg <= S2MM006_IRQ_LAST; reg++) {
+		ret = s2mm006_read(pdic, reg);
+		if (ret < 0)
+			return ret;
+		pending[reg - S2MM006_IRQ_FIRST] = ret;
+	}
+
+	/* The firmware driver acknowledges by writing each value back. */
+	for (reg = S2MM006_IRQ_FIRST; reg <= S2MM006_IRQ_LAST; reg++) {
+		ret = s2mm006_write(pdic, reg,
+				    pending[reg - S2MM006_IRQ_FIRST]);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
+static void s2mm006_check_status(struct s2mm006 *pdic)
+{
 	struct device *dev = &pdic->client->dev;
 	enum s2mm006_mode mode;
 	u8 command, status_bit;
@@ -100,18 +115,18 @@ static void s2mm006_monitor(struct work_struct *work)
 
 	bc = s2mm006_read(pdic, S2MM006_REG_BC_STATUS);
 	if (bc < 0)
-		goto reschedule;
+		return;
 
 	if (!bc) {
 		pdic->attempted_mode = S2MM006_MODE_NONE;
-		goto reschedule;
+		return;
 	}
 
 	attach = s2mm006_read(pdic, S2MM006_REG_ATTACH);
 	vbus = s2mm006_read(pdic, S2MM006_REG_VBUS);
 	sw = s2mm006_read(pdic, S2MM006_REG_SWITCH_STATUS);
 	if (attach < 0 || vbus < 0 || sw < 0)
-		goto reschedule;
+		return;
 
 	/* Windows EMEC treats bit 0 of BC_STATUS as VBUS detected. */
 	if ((bc & BIT(0)) && attach == 0x1b && vbus == 0x01 &&
@@ -126,61 +141,48 @@ static void s2mm006_monitor(struct work_struct *work)
 		command = S2MM006_PROVIDER_COMMAND;
 		status_bit = BIT(0);
 	} else {
-		goto reschedule;
+		return;
 	}
 
 	if (pdic->attempted_mode != mode)
 		pdic->attempted_mode = S2MM006_MODE_NONE;
 	if (sw & status_bit) {
 		pdic->attempted_mode = mode;
-		goto reschedule;
+		return;
 	}
 	if (pdic->attempted_mode == mode)
-		goto reschedule;
+		return;
 
 	ret = s2mm006_write(pdic, S2MM006_REG_SWITCH_COMMAND, command);
 	if (ret) {
-		dev_warn_ratelimited(dev, "failed to enable %s path: %d\n",
-				     mode == S2MM006_MODE_CONSUMER ? "consumer" : "provider",
-				     ret);
+		dev_warn(dev, "failed to enable %s path: %d\n",
+			 mode == S2MM006_MODE_CONSUMER ? "consumer" : "provider",
+			 ret);
 	} else {
 		pdic->attempted_mode = mode;
 		dev_info(dev, "requested %s path after attach\n",
 			 mode == S2MM006_MODE_CONSUMER ? "consumer" : "provider");
 	}
-
-reschedule:
-	schedule_delayed_work(&pdic->monitor,
-			      msecs_to_jiffies(S2MM006_MONITOR_MS));
 }
 
-static int s2mm006_status_show(struct seq_file *seq, void *unused)
+static irqreturn_t s2mm006_irq_thread(int irq, void *data)
 {
-	struct device *dev = seq->private;
-	struct s2mm006 *pdic = dev_get_drvdata(dev);
-	int reg, value;
+	struct s2mm006 *pdic = data;
+	int ret;
 
-	for (reg = S2MM006_STATUS_FIRST; reg <= S2MM006_STATUS_LAST; reg++) {
-		value = s2mm006_read(pdic, reg);
-		if (value < 0)
-			seq_printf(seq, "%02x: error %d\n", reg, value);
-		else
-			seq_printf(seq, "%02x: %02x\n", reg, value);
-	}
+	ret = s2mm006_clear_irqs(pdic);
+	s2mm006_check_status(pdic);
+	if (ret)
+		dev_warn_ratelimited(&pdic->client->dev,
+				     "failed to clear interrupt: %d\n", ret);
 
-	return 0;
-}
-
-static void s2mm006_debugfs_remove(void *data)
-{
-	debugfs_remove_recursive(data);
+	return IRQ_HANDLED;
 }
 
 static int s2mm006_probe(struct i2c_client *client)
 {
 	struct device *dev = &client->dev;
 	struct s2mm006 *pdic;
-	char *name;
 	int status;
 	int ret;
 
@@ -193,39 +195,31 @@ static int s2mm006_probe(struct i2c_client *client)
 		return -ENOMEM;
 
 	pdic->client = client;
-	i2c_set_clientdata(client, pdic);
-	INIT_DELAYED_WORK(&pdic->monitor, s2mm006_monitor);
 
-	status = s2mm006_read(pdic, S2MM006_STATUS_LAST);
+	status = s2mm006_read(pdic, S2MM006_REG_SWITCH_STATUS);
 	if (status < 0)
 		return dev_err_probe(dev, status, "unable to read PDIC status\n");
 
-	name = devm_kasprintf(dev, GFP_KERNEL, "s2mm006-%s", dev_name(dev));
-	if (!name)
-		return -ENOMEM;
+	if (client->irq <= 0)
+		return dev_err_probe(dev, -EINVAL, "missing interrupt\n");
 
-	pdic->debugfs = debugfs_create_dir(name, NULL);
-	if (!IS_ERR_OR_NULL(pdic->debugfs)) {
-		ret = devm_add_action_or_reset(dev, s2mm006_debugfs_remove,
-					       pdic->debugfs);
-		if (ret)
-			return ret;
+	ret = s2mm006_clear_irqs(pdic);
+	if (ret)
+		return dev_err_probe(dev, ret, "unable to clear pending interrupts\n");
 
-		debugfs_create_devm_seqfile(dev, "status", pdic->debugfs,
-					    s2mm006_status_show);
-	}
-	dev_info(dev, "S2MM006 power-path monitor bound; switch status: 0x%02x\n",
+	/* A later event holds the level-low line until the IRQ is requested. */
+	s2mm006_check_status(pdic);
+
+	ret = devm_request_threaded_irq(dev, client->irq, NULL,
+					s2mm006_irq_thread, IRQF_ONESHOT,
+					dev_name(dev), pdic);
+	if (ret)
+		return dev_err_probe(dev, ret, "unable to request interrupt\n");
+
+	dev_info(dev, "S2MM006 controller ready; switch status: 0x%02x\n",
 		 status);
-	schedule_delayed_work(&pdic->monitor, 0);
 
 	return 0;
-}
-
-static void s2mm006_remove(struct i2c_client *client)
-{
-	struct s2mm006 *pdic = i2c_get_clientdata(client);
-
-	cancel_delayed_work_sync(&pdic->monitor);
 }
 
 static const struct of_device_id s2mm006_of_match[] = {
@@ -240,9 +234,8 @@ static struct i2c_driver s2mm006_driver = {
 		.of_match_table = s2mm006_of_match,
 	},
 	.probe = s2mm006_probe,
-	.remove = s2mm006_remove,
 };
 module_i2c_driver(s2mm006_driver);
 
-MODULE_DESCRIPTION("Samsung S2MM006 USB Type-C power-path monitor");
+MODULE_DESCRIPTION("Samsung S2MM006 USB Type-C power-path driver");
 MODULE_LICENSE("GPL");
