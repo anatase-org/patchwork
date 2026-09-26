@@ -18,6 +18,7 @@ fi
 
 HOST=$1
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+NVIDIA_DIR=$ROOT/../open-gpu-kernel-modules
 STAGE_DIR=$ROOT/.sync-arm/stage
 ASSET_DIR=$ROOT/.sync-arm/boot-assets
 DEFAULT_EFI_STUB=/usr/lib/systemd/boot/efi/linuxaa64.efi.stub
@@ -153,6 +154,24 @@ install -m 0644 "$ROOT/$KIMAGE" "$STAGE_DIR/vmlinuz"
 make -s -j "$JOBS" "${MAKE_ARGS[@]}" modules_install "INSTALL_MOD_PATH=$STAGE_DIR"
 make -s "${MAKE_ARGS[@]}" dtbs_install \
     "INSTALL_DTBS_PATH=$STAGE_DIR/lib/modules/$KNAME/dtb"
+
+# Build and stage NVIDIA's open modules alongside the in-tree modules.
+if [[ -f $NVIDIA_DIR/Makefile ]]; then
+    NVIDIA_MAKE_ARGS=(-C "$NVIDIA_DIR" ARCH=arm64 TARGET_ARCH=aarch64
+        "CROSS_COMPILE=$CROSS_COMPILE" "SYSSRC=$ROOT" "SYSOUT=$ROOT"
+        "CC=${CROSS_COMPILE}gcc" "LD=${CROSS_COMPILE}ld"
+        "AR=${CROSS_COMPILE}ar" "CXX=${CROSS_COMPILE}g++"
+        "OBJCOPY=${CROSS_COMPILE}objcopy" "OBJDUMP=${CROSS_COMPILE}objdump"
+        HOST_CC=gcc HOST_LD=ld HOSTCC=gcc HOSTCXX=g++)
+
+    echo "Building NVIDIA modules from $NVIDIA_DIR"
+    time make -s -j "$JOBS" "${NVIDIA_MAKE_ARGS[@]}" modules
+    echo "Installing NVIDIA modules to $STAGE_DIR"
+    make -s -j "$JOBS" "${NVIDIA_MAKE_ARGS[@]}" modules_install \
+        "INSTALL_MOD_PATH=$STAGE_DIR"
+else
+    echo "NVIDIA module sources not found at $NVIDIA_DIR; skipping"
+fi
 
 # Match the x1*/sc8280x* DTB selection and exclusions in the Red Hat spec.
 DTB_DIR=$STAGE_DIR/lib/modules/$KNAME/dtb/qcom
