@@ -2,30 +2,41 @@
 /*
  * Copyright (c) 2026 Antheas Kapenekakis <lkml@antheas.dev>
  *
- * Report battery and AC adapter status through the Samsung EC mailbox.
+ * Report battery and AC adapter status through the ENE KB9058 EC mailbox.
  * The NP750XQB ACPI ECTC, BATC and ADP1 methods describe the battery
  * register layout used here.
  */
 
+#include <linux/bitops.h>
 #include <linux/cleanup.h>
 #include <linux/delay.h>
+#include <linux/errno.h>
 #include <linux/i2c.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/of.h>
 #include <linux/power_supply.h>
+#include <linux/slab.h>
+#include <linux/string.h>
 #include <linux/workqueue.h>
 
-#define SAMSUNG_EC_POLL_INTERVAL	(30 * HZ)
+#define KB9058_POLL_INTERVAL	(30 * HZ)
 
-#define SAMSUNG_EC_FLAGS		0x80
-#define SAMSUNG_EC_BAT_STATUS	0x84
-#define SAMSUNG_EC_REMAINING	0xa0
-#define SAMSUNG_EC_BAT_VOLTAGE	0xa4
-#define SAMSUNG_EC_CAPACITY	0xb0
-#define SAMSUNG_EC_DESIGN_VOLTAGE	0xb4
-#define SAMSUNG_EC_CYCLES		0xd0
+#define KB9058_FLAGS		0x80
+#define KB9058_BAT_STATUS	0x84
+#define KB9058_REMAINING	0xa0
+#define KB9058_BAT_VOLTAGE	0xa4
+#define KB9058_CAPACITY	0xb0
+#define KB9058_DESIGN_VOLTAGE	0xb4
+#define KB9058_CYCLES		0xd0
 
-struct samsung_ec_battery_data {
+#define KB9058_BAT_PRESENT	BIT(0)
+#define KB9058_AC_PRESENT	BIT(2)
+#define KB9058_BAT_DISCHARGING	BIT(0)
+#define KB9058_BAT_CHARGING	BIT(1)
+#define KB9058_BAT_FULL		BIT(3)
+
+struct kb9058_battery_data {
 	int status;
 	int present;
 	int ac_online;
@@ -38,16 +49,17 @@ struct samsung_ec_battery_data {
 	int cycle_count;
 };
 
-struct samsung_ec_battery {
+struct kb9058_battery {
 	struct i2c_client *client;
 	struct power_supply *battery;
 	struct power_supply *ac;
 	struct delayed_work poll_work;
+	/* Serializes mailbox transactions and cached power-supply properties. */
 	struct mutex lock;
-	struct samsung_ec_battery_data data;
+	struct kb9058_battery_data data;
 };
 
-static int samsung_ec_battery_read_byte(struct i2c_client *client, u8 reg, u8 *value)
+static int kb9058_battery_read_byte(struct i2c_client *client, u8 reg, u8 *value)
 {
 	u8 select[] = { 0x40, 0x00, 0xf4, 0x80, reg };
 	u8 execute[] = { 0x40, 0x00, 0xff, 0x10, 0x88 };
@@ -82,16 +94,16 @@ static int samsung_ec_battery_read_byte(struct i2c_client *client, u8 reg, u8 *v
 	return 0;
 }
 
-static int samsung_ec_battery_read_word(struct i2c_client *client, u8 reg,
+static int kb9058_battery_read_word(struct i2c_client *client, u8 reg,
 					unsigned int offset, int *value)
 {
 	u8 low, high;
 	int ret;
 
-	ret = samsung_ec_battery_read_byte(client, reg + offset, &high);
+	ret = kb9058_battery_read_byte(client, reg + offset, &high);
 	if (ret)
 		return ret;
-	ret = samsung_ec_battery_read_byte(client, reg + offset + 1, &low);
+	ret = kb9058_battery_read_byte(client, reg + offset + 1, &low);
 	if (ret)
 		return ret;
 
@@ -99,60 +111,60 @@ static int samsung_ec_battery_read_word(struct i2c_client *client, u8 reg,
 	return 0;
 }
 
-static int samsung_ec_battery_refresh(struct samsung_ec_battery *ec,
-				      struct samsung_ec_battery_data *data)
+static int kb9058_battery_refresh(struct kb9058_battery *ec,
+				      struct kb9058_battery_data *data)
 {
 	struct i2c_client *client = ec->client;
 	u8 flags, state;
 	int current_ma;
 	int ret;
 
-	ret = samsung_ec_battery_read_byte(client, SAMSUNG_EC_FLAGS, &flags);
+	ret = kb9058_battery_read_byte(client, KB9058_FLAGS, &flags);
 	if (ret)
 		return ret;
-	ret = samsung_ec_battery_read_byte(client, SAMSUNG_EC_BAT_STATUS, &state);
+	ret = kb9058_battery_read_byte(client, KB9058_BAT_STATUS, &state);
 	if (ret)
 		return ret;
 
-	data->present = !!(flags & BIT(0));
-	data->ac_online = !!(flags & BIT(2));
+	data->present = !!(flags & KB9058_BAT_PRESENT);
+	data->ac_online = !!(flags & KB9058_AC_PRESENT);
 
-	if (state & BIT(3))
+	if (state & KB9058_BAT_FULL)
 		data->status = POWER_SUPPLY_STATUS_FULL;
-	else if (state & BIT(1))
+	else if (state & KB9058_BAT_CHARGING)
 		data->status = POWER_SUPPLY_STATUS_CHARGING;
-	else if (state & BIT(0))
+	else if (state & KB9058_BAT_DISCHARGING)
 		data->status = POWER_SUPPLY_STATUS_DISCHARGING;
 	else
 		data->status = POWER_SUPPLY_STATUS_NOT_CHARGING;
 
 	/* BATC._BST reads the upper big-endian word of B1RR. */
-	ret = samsung_ec_battery_read_word(client, SAMSUNG_EC_REMAINING, 2,
+	ret = kb9058_battery_read_word(client, KB9058_REMAINING, 2,
 					   &data->charge_now);
 	if (ret)
 		return ret;
-	ret = samsung_ec_battery_read_word(client, SAMSUNG_EC_BAT_VOLTAGE, 2,
+	ret = kb9058_battery_read_word(client, KB9058_BAT_VOLTAGE, 2,
 					   &data->voltage_now);
 	if (ret)
 		return ret;
-	ret = samsung_ec_battery_read_word(client, SAMSUNG_EC_BAT_VOLTAGE, 0,
+	ret = kb9058_battery_read_word(client, KB9058_BAT_VOLTAGE, 0,
 					   &current_ma);
 	if (ret)
 		return ret;
 	/* BATC._BIX reads design capacity from the lower word of B1AF. */
-	ret = samsung_ec_battery_read_word(client, SAMSUNG_EC_CAPACITY, 0,
+	ret = kb9058_battery_read_word(client, KB9058_CAPACITY, 0,
 					   &data->charge_full_design);
 	if (ret)
 		return ret;
-	ret = samsung_ec_battery_read_word(client, SAMSUNG_EC_CAPACITY, 2,
+	ret = kb9058_battery_read_word(client, KB9058_CAPACITY, 2,
 					   &data->charge_full);
 	if (ret)
 		return ret;
-	ret = samsung_ec_battery_read_word(client, SAMSUNG_EC_DESIGN_VOLTAGE, 0,
+	ret = kb9058_battery_read_word(client, KB9058_DESIGN_VOLTAGE, 0,
 					   &data->voltage_min_design);
 	if (ret)
 		return ret;
-	ret = samsung_ec_battery_read_word(client, SAMSUNG_EC_CYCLES, 0,
+	ret = kb9058_battery_read_word(client, KB9058_CYCLES, 0,
 					   &data->cycle_count);
 	if (ret)
 		return ret;
@@ -198,7 +210,7 @@ static int samsung_ec_battery_refresh(struct samsung_ec_battery *ec,
 	return 0;
 }
 
-static enum power_supply_property samsung_ec_battery_properties[] = {
+static enum power_supply_property kb9058_battery_properties[] = {
 	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
@@ -214,83 +226,77 @@ static enum power_supply_property samsung_ec_battery_properties[] = {
 	POWER_SUPPLY_PROP_MANUFACTURER,
 };
 
-static int samsung_ec_battery_get_property(struct power_supply *psy,
+static int kb9058_battery_get_property(struct power_supply *psy,
 					   enum power_supply_property prop,
 					   union power_supply_propval *val)
 {
-	struct samsung_ec_battery *ec = power_supply_get_drvdata(psy);
-	const struct samsung_ec_battery_data *data = &ec->data;
-	int ret = 0;
+	struct kb9058_battery *ec = power_supply_get_drvdata(psy);
+	const struct kb9058_battery_data *data = &ec->data;
+	int value;
 
 	guard(mutex)(&ec->lock);
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_STATUS:
-		val->intval = data->status;
+		value = data->status;
 		break;
 	case POWER_SUPPLY_PROP_PRESENT:
-		val->intval = data->present;
+		value = data->present;
 		break;
 	case POWER_SUPPLY_PROP_TECHNOLOGY:
-		val->intval = POWER_SUPPLY_TECHNOLOGY_LION;
+		value = POWER_SUPPLY_TECHNOLOGY_LION;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
 		if (data->charge_now < 0 || data->charge_full <= 0)
-			ret = -ENODATA;
-		else
-			val->intval = clamp(100 * (data->charge_now / 1000) /
-					     (data->charge_full / 1000),
-					     0, 100);
+			return -ENODATA;
+		value = clamp(100 * (data->charge_now / 1000) /
+			      (data->charge_full / 1000), 0, 100);
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_NOW:
-		val->intval = data->charge_now;
+		value = data->charge_now;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
-		val->intval = data->charge_full;
+		value = data->charge_full;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-		val->intval = data->charge_full_design;
+		value = data->charge_full_design;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		val->intval = data->voltage_now;
+		value = data->voltage_now;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN:
-		val->intval = data->voltage_min_design;
+		value = data->voltage_min_design;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		val->intval = data->current_now;
+		value = data->current_now;
 		break;
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
-		val->intval = data->cycle_count;
+		value = data->cycle_count;
 		break;
 	case POWER_SUPPLY_PROP_MODEL_NAME:
-		val->strval = "Galaxy Book4 Edge Battery";
-		break;
+		/* BATC._BIX supplies this fixed model string. */
+		val->strval = "SR Real Battery";
+		return 0;
 	case POWER_SUPPLY_PROP_MANUFACTURER:
-		val->strval = "Samsung";
-		break;
+		val->strval = "SAMSUNG Electronics";
+		return 0;
 	default:
-		ret = -EINVAL;
+		return -EINVAL;
 	}
 
-	if (!ret && (prop == POWER_SUPPLY_PROP_CHARGE_NOW ||
-		     prop == POWER_SUPPLY_PROP_CHARGE_FULL ||
-		     prop == POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN ||
-		     prop == POWER_SUPPLY_PROP_VOLTAGE_NOW ||
-		     prop == POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN ||
-		     prop == POWER_SUPPLY_PROP_CURRENT_NOW ||
-		     prop == POWER_SUPPLY_PROP_CYCLE_COUNT) && val->intval < 0 &&
-	    !(prop == POWER_SUPPLY_PROP_CURRENT_NOW && val->intval != -1))
-		ret = -ENODATA;
+	/* Negative current is valid while discharging; -1 marks unknown data. */
+	if (value < 0 && (prop != POWER_SUPPLY_PROP_CURRENT_NOW || value == -1))
+		return -ENODATA;
 
-	return ret;
+	val->intval = value;
+	return 0;
 }
 
-static int samsung_ec_ac_get_property(struct power_supply *psy,
+static int kb9058_ac_get_property(struct power_supply *psy,
 				      enum power_supply_property prop,
 				      union power_supply_propval *val)
 {
-	struct samsung_ec_battery *ec = power_supply_get_drvdata(psy);
+	struct kb9058_battery *ec = power_supply_get_drvdata(psy);
 
 	if (prop != POWER_SUPPLY_PROP_ONLINE)
 		return -EINVAL;
@@ -300,57 +306,62 @@ static int samsung_ec_ac_get_property(struct power_supply *psy,
 	return 0;
 }
 
-static enum power_supply_property samsung_ec_ac_properties[] = {
+static enum power_supply_property kb9058_ac_properties[] = {
 	POWER_SUPPLY_PROP_ONLINE,
 };
 
-static const struct power_supply_desc samsung_ec_battery_desc = {
-	.name = "samsung-galaxybook-battery",
+static const struct power_supply_desc kb9058_battery_desc = {
+	.name = "kb9058-battery",
 	.type = POWER_SUPPLY_TYPE_BATTERY,
-	.properties = samsung_ec_battery_properties,
-	.num_properties = ARRAY_SIZE(samsung_ec_battery_properties),
-	.get_property = samsung_ec_battery_get_property,
+	.properties = kb9058_battery_properties,
+	.num_properties = ARRAY_SIZE(kb9058_battery_properties),
+	.get_property = kb9058_battery_get_property,
 };
 
-static const struct power_supply_desc samsung_ec_ac_desc = {
-	.name = "samsung-galaxybook-ac",
+static const struct power_supply_desc kb9058_ac_desc = {
+	.name = "kb9058-ac",
 	.type = POWER_SUPPLY_TYPE_MAINS,
-	.properties = samsung_ec_ac_properties,
-	.num_properties = ARRAY_SIZE(samsung_ec_ac_properties),
-	.get_property = samsung_ec_ac_get_property,
+	.properties = kb9058_ac_properties,
+	.num_properties = ARRAY_SIZE(kb9058_ac_properties),
+	.get_property = kb9058_ac_get_property,
 };
 
-static void samsung_ec_battery_poll(struct work_struct *work)
+static void kb9058_battery_poll(struct work_struct *work)
 {
-	struct samsung_ec_battery *ec = container_of(to_delayed_work(work),
-						struct samsung_ec_battery, poll_work);
-	struct samsung_ec_battery_data data = {};
+	struct kb9058_battery *ec = container_of(to_delayed_work(work),
+						struct kb9058_battery, poll_work);
+	struct kb9058_battery_data data = {};
 	bool changed = false;
 	int ret;
 
-	mutex_lock(&ec->lock);
-	ret = samsung_ec_battery_refresh(ec, &data);
-	if (ret) {
-		dev_warn_ratelimited(&ec->client->dev, "EC read failed: %d\n", ret);
-	} else {
-		changed = memcmp(&ec->data, &data, sizeof(data));
-		ec->data = data;
+	scoped_guard(mutex, &ec->lock) {
+		ret = kb9058_battery_refresh(ec, &data);
+		if (ret) {
+			dev_warn_ratelimited(&ec->client->dev,
+					     "EC read failed: %d\n", ret);
+		} else {
+			changed = memcmp(&ec->data, &data, sizeof(data));
+			ec->data = data;
+		}
 	}
-	mutex_unlock(&ec->lock);
 
 	if (!ret && changed) {
 		power_supply_changed(ec->battery);
 		power_supply_changed(ec->ac);
 	}
 
-	schedule_delayed_work(&ec->poll_work, SAMSUNG_EC_POLL_INTERVAL);
+	schedule_delayed_work(&ec->poll_work, KB9058_POLL_INTERVAL);
 }
 
-static int samsung_ec_battery_probe(struct i2c_client *client)
+static int kb9058_battery_probe(struct i2c_client *client)
 {
 	struct power_supply_config cfg = {};
-	struct samsung_ec_battery *ec;
+	struct kb9058_battery *ec;
 	int ret;
+
+	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C))
+		return dev_err_probe(&client->dev, -EOPNOTSUPP,
+				     "adapter lacks combined I2C transfers\n");
 
 	ec = devm_kzalloc(&client->dev, sizeof(*ec), GFP_KERNEL);
 	if (!ec)
@@ -358,61 +369,54 @@ static int samsung_ec_battery_probe(struct i2c_client *client)
 
 	ec->client = client;
 	mutex_init(&ec->lock);
-	INIT_DELAYED_WORK(&ec->poll_work, samsung_ec_battery_poll);
+	INIT_DELAYED_WORK(&ec->poll_work, kb9058_battery_poll);
 
-	ret = samsung_ec_battery_refresh(ec, &ec->data);
+	ret = kb9058_battery_refresh(ec, &ec->data);
 	if (ret)
 		return dev_err_probe(&client->dev, ret, "failed to read EC battery\n");
 
 	cfg.drv_data = ec;
 	cfg.fwnode = dev_fwnode(&client->dev);
 	ec->battery = devm_power_supply_register(&client->dev,
-						  &samsung_ec_battery_desc, &cfg);
+						  &kb9058_battery_desc, &cfg);
 	if (IS_ERR(ec->battery))
 		return dev_err_probe(&client->dev, PTR_ERR(ec->battery),
 				     "failed to register battery\n");
 
-	ec->ac = devm_power_supply_register(&client->dev, &samsung_ec_ac_desc,
+	ec->ac = devm_power_supply_register(&client->dev, &kb9058_ac_desc,
 					     &cfg);
 	if (IS_ERR(ec->ac))
 		return dev_err_probe(&client->dev, PTR_ERR(ec->ac),
 				     "failed to register AC supply\n");
 
 	i2c_set_clientdata(client, ec);
-	schedule_delayed_work(&ec->poll_work, SAMSUNG_EC_POLL_INTERVAL);
+	schedule_delayed_work(&ec->poll_work, KB9058_POLL_INTERVAL);
 
 	return 0;
 }
 
-static void samsung_ec_battery_remove(struct i2c_client *client)
+static void kb9058_battery_remove(struct i2c_client *client)
 {
-	struct samsung_ec_battery *ec = i2c_get_clientdata(client);
+	struct kb9058_battery *ec = i2c_get_clientdata(client);
 
 	cancel_delayed_work_sync(&ec->poll_work);
 }
 
-static const struct of_device_id samsung_ec_battery_of_match[] = {
-	{ .compatible = "samsung,galaxybook-ec-battery" },
+static const struct of_device_id kb9058_battery_of_match[] = {
+	{ .compatible = "ene,kb9058-battery" },
 	{}
 };
-MODULE_DEVICE_TABLE(of, samsung_ec_battery_of_match);
+MODULE_DEVICE_TABLE(of, kb9058_battery_of_match);
 
-static const struct i2c_device_id samsung_ec_battery_i2c_id[] = {
-	{ "galaxybook-ec-bat" },
-	{}
-};
-MODULE_DEVICE_TABLE(i2c, samsung_ec_battery_i2c_id);
-
-static struct i2c_driver samsung_ec_battery_driver = {
+static struct i2c_driver kb9058_battery_driver = {
 	.driver = {
-		.name = "samsung-galaxybook-ec-battery",
-		.of_match_table = samsung_ec_battery_of_match,
+		.name = "ene-kb9058-battery",
+		.of_match_table = kb9058_battery_of_match,
 	},
-	.probe = samsung_ec_battery_probe,
-	.remove = samsung_ec_battery_remove,
-	.id_table = samsung_ec_battery_i2c_id,
+	.probe = kb9058_battery_probe,
+	.remove = kb9058_battery_remove,
 };
-module_i2c_driver(samsung_ec_battery_driver);
+module_i2c_driver(kb9058_battery_driver);
 
-MODULE_DESCRIPTION("Samsung Galaxy Book4 Edge EC battery");
+MODULE_DESCRIPTION("ENE KB9058 EC battery and AC adapter");
 MODULE_LICENSE("GPL");
