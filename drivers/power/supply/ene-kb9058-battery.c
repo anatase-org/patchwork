@@ -12,15 +12,13 @@
 #include <linux/delay.h>
 #include <linux/errno.h>
 #include <linux/i2c.h>
+#include <linux/interrupt.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/of.h>
 #include <linux/power_supply.h>
 #include <linux/slab.h>
 #include <linux/string.h>
-#include <linux/workqueue.h>
-
-#define KB9058_POLL_INTERVAL	(30 * HZ)
 
 #define KB9058_FLAGS		0x80
 #define KB9058_BAT_STATUS	0x84
@@ -53,7 +51,6 @@ struct kb9058_battery {
 	struct i2c_client *client;
 	struct power_supply *battery;
 	struct power_supply *ac;
-	struct delayed_work poll_work;
 	/* Serializes mailbox transactions and cached power-supply properties. */
 	struct mutex lock;
 	struct kb9058_battery_data data;
@@ -326,10 +323,9 @@ static const struct power_supply_desc kb9058_ac_desc = {
 	.get_property = kb9058_ac_get_property,
 };
 
-static void kb9058_battery_poll(struct work_struct *work)
+static irqreturn_t kb9058_battery_irq_thread(int irq, void *ptr)
 {
-	struct kb9058_battery *ec = container_of(to_delayed_work(work),
-						struct kb9058_battery, poll_work);
+	struct kb9058_battery *ec = ptr;
 	struct kb9058_battery_data data = {};
 	bool changed = false;
 	int ret;
@@ -350,7 +346,7 @@ static void kb9058_battery_poll(struct work_struct *work)
 		power_supply_changed(ec->ac);
 	}
 
-	schedule_delayed_work(&ec->poll_work, KB9058_POLL_INTERVAL);
+	return IRQ_HANDLED;
 }
 
 static int kb9058_battery_probe(struct i2c_client *client)
@@ -362,6 +358,9 @@ static int kb9058_battery_probe(struct i2c_client *client)
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C))
 		return dev_err_probe(&client->dev, -EOPNOTSUPP,
 				     "adapter lacks combined I2C transfers\n");
+	if (!client->irq)
+		return dev_err_probe(&client->dev, -EINVAL,
+				     "EC interrupt is required\n");
 
 	ec = devm_kzalloc(&client->dev, sizeof(*ec), GFP_KERNEL);
 	if (!ec)
@@ -369,7 +368,6 @@ static int kb9058_battery_probe(struct i2c_client *client)
 
 	ec->client = client;
 	mutex_init(&ec->lock);
-	INIT_DELAYED_WORK(&ec->poll_work, kb9058_battery_poll);
 
 	ret = kb9058_battery_refresh(ec, &ec->data);
 	if (ret)
@@ -390,16 +388,9 @@ static int kb9058_battery_probe(struct i2c_client *client)
 				     "failed to register AC supply\n");
 
 	i2c_set_clientdata(client, ec);
-	schedule_delayed_work(&ec->poll_work, KB9058_POLL_INTERVAL);
-
-	return 0;
-}
-
-static void kb9058_battery_remove(struct i2c_client *client)
-{
-	struct kb9058_battery *ec = i2c_get_clientdata(client);
-
-	cancel_delayed_work_sync(&ec->poll_work);
+	return devm_request_threaded_irq(&client->dev, client->irq, NULL,
+					 kb9058_battery_irq_thread, IRQF_ONESHOT,
+					 dev_name(&client->dev), ec);
 }
 
 static const struct of_device_id kb9058_battery_of_match[] = {
@@ -414,7 +405,6 @@ static struct i2c_driver kb9058_battery_driver = {
 		.of_match_table = kb9058_battery_of_match,
 	},
 	.probe = kb9058_battery_probe,
-	.remove = kb9058_battery_remove,
 };
 module_i2c_driver(kb9058_battery_driver);
 
