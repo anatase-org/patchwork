@@ -16,29 +16,34 @@ description: |
 
 properties:
   compatible:
-    items:
-      - const: samsung,np750xqb-kb9058-battery
-      - const: ene,kb9058-battery
+    const: ene,kb9058-battery
 
   reg:
+    maxItems: 1
+
+  interrupts:
     maxItems: 1
 
 required:
   - compatible
   - reg
+  - interrupts
 
 additionalProperties: false
 
 examples:
   - |
+    #include <dt-bindings/interrupt-controller/irq.h>
+
     i2c {
         #address-cells = <1>;
         #size-cells = <0>;
 
         embedded-controller@64 {
-            compatible = "samsung,np750xqb-kb9058-battery",
-                         "ene,kb9058-battery";
+            compatible = "ene,kb9058-battery";
             reg = <0x64>;
+            interrupt-parent = <&gpio0>;
+            interrupts = <66 IRQ_TYPE_EDGE_FALLING>;
         };
     };
 ...
