@@ -1,0 +1,10 @@
+{
+    "type": "devicetree",
+    "name": "Samsung Galaxy Book4 Edge NP940XMA",
+    "compatible": "samsung,galaxy-book4-edge-np940xma",
+    "hwids": [
+        "24c0c41a-2907-5fbd-8995-77d346b25e23",
+        "b9cdc7e8-ae5b-5b14-a88a-81bdfc5b3cb5",
+        "40fa62c9-25c2-5ab2-bafe-ef965a06768d"
+    ]
+}
