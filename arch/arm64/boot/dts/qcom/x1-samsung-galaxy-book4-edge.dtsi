@@ -659,7 +659,7 @@
 	status = "okay";
 
 	embedded-controller@64 {
-		compatible = "ene,kb9058-battery";
+		compatible = "samsung,galaxybook4-edge-ec";
 		reg = <0x64>;
 		interrupts-extended = <&tlmm 66 IRQ_TYPE_EDGE_FALLING>;
 	};
