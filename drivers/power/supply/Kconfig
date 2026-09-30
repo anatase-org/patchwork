@@ -176,6 +176,15 @@ config BATTERY_DS2782
 	  Say Y here to enable support for the DS2782/DS2786 standalone battery
 	  gas-gauge.
 
+config BATTERY_ENE_KB9058
+	tristate "ENE KB9058 EC battery and AC adapter"
+	depends on I2C && OF
+	help
+	  Say Y here to report battery and AC adapter status from the ENE
+	  KB9058 EC mailbox on Samsung Galaxy Book4 Edge laptops.
+
+	  This driver builds as the ene-kb9058-battery module.
+
 config BATTERY_HUAWEI_GAOKUN
 	tristate "Huawei Matebook E Go power supply"
 	depends on EC_HUAWEI_GAOKUN
