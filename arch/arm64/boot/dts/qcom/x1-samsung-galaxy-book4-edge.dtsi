@@ -661,6 +661,7 @@
 	embedded-controller@64 {
 		compatible = "samsung,galaxybook4-edge-ec";
 		reg = <0x64>;
+		samsung,event-interface = <&ec_events>;
 		interrupts-extended = <&tlmm 66 IRQ_TYPE_EDGE_FALLING>;
 	};
 
@@ -672,6 +673,18 @@
 		pinctrl-0 = <&kybd_default>;
 		pinctrl-names = "default";
 		wakeup-source;
+	};
+};
+
+&i2c5 {
+	clock-frequency = <400000>;
+	status = "okay";
+
+	ec_events: embedded-controller@62 {
+		compatible = "samsung,galaxybook4-edge-ec-events";
+		reg = <0x62>;
+		/* The mailbox driver owns this secondary interface. */
+		status = "disabled";
 	};
 };
 
