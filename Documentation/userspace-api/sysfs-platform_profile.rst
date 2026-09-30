@@ -59,6 +59,7 @@ all handlers don't support a profile.
 
 Individual drivers will register a 'platform_profile' class device that has
 similar semantics as the ``/sys/firmware/acpi/platform_profile`` interface.
+Only the class interface is available when the system is booted without ACPI.
 
 To discover which driver is associated with a platform profile handler the
 user can read the ``name`` attribute of the class device.
