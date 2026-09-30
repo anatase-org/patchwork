@@ -106,89 +106,6 @@
 		};
 	};
 
-	pmic-glink {
-		compatible = "qcom,x1e80100-pmic-glink",
-			     "qcom,pmic-glink";
-		#address-cells = <1>;
-		#size-cells = <0>;
-		orientation-gpios = <&tlmm 121 GPIO_ACTIVE_HIGH>,
-				    <&tlmm 123 GPIO_ACTIVE_HIGH>;
-
-		/* Left-side rear port */
-		connector@0 {
-			compatible = "usb-c-connector";
-			reg = <0>;
-			power-role = "dual";
-			data-role = "dual";
-
-			ports {
-				#address-cells = <1>;
-				#size-cells = <0>;
-
-				port@0 {
-					reg = <0>;
-
-					pmic_glink_ss0_hs_in: endpoint {
-						remote-endpoint = <&usb_1_ss0_dwc3_hs>;
-					};
-				};
-
-				port@1 {
-					reg = <1>;
-
-					pmic_glink_ss0_ss_in: endpoint {
-						remote-endpoint = <&usb_1_ss0_qmpphy_out>;
-					};
-				};
-
-				port@2 {
-					reg = <2>;
-
-					pmic_glink_ss0_sbu: endpoint {
-						remote-endpoint = <&usb_1_ss0_sbu_mux>;
-					};
-				};
-			};
-		};
-
-		/* Left-side front port */
-		connector@1 {
-			compatible = "usb-c-connector";
-			reg = <1>;
-			power-role = "dual";
-			data-role = "dual";
-
-			ports {
-				#address-cells = <1>;
-				#size-cells = <0>;
-
-				port@0 {
-					reg = <0>;
-
-					pmic_glink_ss1_hs_in: endpoint {
-						remote-endpoint = <&usb_1_ss1_dwc3_hs>;
-					};
-				};
-
-				port@1 {
-					reg = <1>;
-
-					pmic_glink_ss1_ss_in: endpoint {
-						remote-endpoint = <&usb_1_ss1_qmpphy_out>;
-					};
-				};
-
-				port@2 {
-					reg = <2>;
-
-					pmic_glink_ss1_sbu: endpoint {
-						remote-endpoint = <&usb_1_ss1_sbu_mux>;
-					};
-				};
-			};
-		};
-	};
-
 	reserved-memory {
 		linux,cma {
 			compatible = "shared-dma-pool";
@@ -201,10 +118,8 @@
 	sound {
 		compatible = "qcom,x1e80100-sndcard";
 		model = "X1E80100-GalaxyBook4Edge";
-		audio-routing = "WooferLeft IN", "WSA WSA_SPK1 OUT",
-				"TweeterLeft IN", "WSA WSA_SPK2 OUT",
-				"WooferRight IN", "WSA2 WSA_SPK2 OUT",
-				"TweeterRight IN", "WSA2 WSA_SPK2 OUT",
+		audio-routing = "SpkrLeft IN", "WSA WSA_SPK1 OUT",
+				"SpkrRight IN", "WSA2 WSA_SPK2 OUT",
 				"IN1_HPHL", "HPHL_OUT",
 				"IN2_HPHR", "HPHR_OUT",
 				"AMIC2", "MIC BIAS2",
@@ -250,10 +165,8 @@
 			link-name = "WSA Playback";
 
 			codec {
-				sound-dai = <&left_woofer>, <&left_tweeter>,
-					    <&swr0 0>, <&lpass_wsamacro 0>,
-					    <&right_woofer>, <&right_tweeter>,
-					    <&swr3 0>, <&lpass_wsa2macro 0>;
+				sound-dai = <&left_spkr>, <&swr0 0>, <&lpass_wsamacro 0>,
+					    <&right_spkr>, <&swr3 0>, <&lpass_wsa2macro 0>;
 			};
 
 			cpu {
@@ -406,7 +319,7 @@
 
 		port {
 			usb_1_ss0_sbu_mux: endpoint {
-				remote-endpoint = <&pmic_glink_ss0_sbu>;
+				remote-endpoint = <&emuec_ss0_sbu>;
 			};
 		};
 	};
@@ -425,7 +338,7 @@
 
 		port {
 			usb_1_ss1_sbu_mux: endpoint {
-				remote-endpoint = <&pmic_glink_ss1_sbu>;
+				remote-endpoint = <&emuec_ss1_sbu>;
 			};
 		};
 	};
@@ -854,6 +767,12 @@
 
 	status = "okay";
 
+	embedded-controller@64 {
+		compatible = "ene,kb9058-battery";
+		reg = <0x64>;
+		interrupts-extended = <&tlmm 66 IRQ_TYPE_EDGE_FALLING>;
+	};
+
 	keyboard@5 {
 		compatible = "hid-over-i2c";
 		reg = <0x5>;
@@ -913,12 +832,60 @@
 		reg = <0x5d>;
 
 		hid-descr-addr = <0x1>;
-		//interrupts-extended = <&tlmm 34 IRQ_TYPE_LEVEL_LOW>;
+		interrupts-extended = <&tlmm 34 IRQ_TYPE_LEVEL_LOW>;
 
 		vdd-supply = <&vreg_misc_3p3>;
 
-		//pinctrl-0 = <&ts0_default>;
-		//pinctrl-names = "default";
+		pinctrl-0 = <&ts0_default>;
+		pinctrl-names = "default";
+	};
+};
+
+&i2c9 {
+	clock-frequency = <400000>;
+
+	status = "okay";
+
+	pdic@33 {
+		compatible = "samsung,s2mm006";
+		reg = <0x33>;
+		interrupts-extended = <&tlmm 38 IRQ_TYPE_LEVEL_LOW>;
+
+		/* Left-side rear port */
+		connector {
+			compatible = "usb-c-connector";
+			power-role = "dual";
+			data-role = "dual";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					emuec_ss0_hs_in: endpoint {
+						remote-endpoint = <&usb_1_ss0_dwc3_hs>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+
+					emuec_ss0_ss_in: endpoint {
+						remote-endpoint = <&usb_1_ss0_qmpphy_out>;
+					};
+				};
+
+				port@2 {
+					reg = <2>;
+
+					emuec_ss0_sbu: endpoint {
+						remote-endpoint = <&usb_1_ss0_sbu_mux>;
+					};
+				};
+			};
+		};
 	};
 };
 
@@ -926,6 +893,54 @@
 	clock-frequency = <400000>;
 
 	status = "okay";
+};
+
+&i2c15 {
+	clock-frequency = <400000>;
+
+	status = "okay";
+
+	pdic@33 {
+		compatible = "samsung,s2mm006";
+		reg = <0x33>;
+		interrupts-extended = <&tlmm 93 IRQ_TYPE_LEVEL_LOW>;
+
+		/* Left-side front port */
+		connector {
+			compatible = "usb-c-connector";
+			power-role = "dual";
+			data-role = "dual";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					emuec_ss1_hs_in: endpoint {
+						remote-endpoint = <&usb_1_ss1_dwc3_hs>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+
+					emuec_ss1_ss_in: endpoint {
+						remote-endpoint = <&usb_1_ss1_qmpphy_out>;
+					};
+				};
+
+				port@2 {
+					reg = <2>;
+
+					emuec_ss1_sbu: endpoint {
+						remote-endpoint = <&usb_1_ss1_sbu_mux>;
+					};
+				};
+			};
+		};
+	};
 };
 
 &lpass_tlmm {
@@ -1119,28 +1134,16 @@
 	pinctrl-0 = <&wsa_swr_active>, <&spkr_01_sd_n_active>;
 	pinctrl-names = "default";
 
-	/* WSA8845, Left Woofer */
-	left_woofer: speaker@0,0 {
-		compatible = "sdw20217020400";
-		reg = <0 0>;
+	/* The NP940XMA has one WSA8835 on each speaker bus. */
+	left_spkr: speaker@0,2 {
+		compatible = "sdw10217020200";
+		reg = <0 2>;
 		reset-gpios = <&lpass_tlmm 12 GPIO_ACTIVE_LOW>;
 		#sound-dai-cells = <0>;
-		sound-name-prefix = "WooferLeft";
-		vdd-1p8-supply = <&vreg_l15b_1p8>;
-		vdd-io-supply = <&vreg_l12b_1p2>;
-		qcom,port-mapping = <1 2 3 7 10 13>;
-	};
-
-	/* WSA8845, Left Tweeter */
-	left_tweeter: speaker@0,1 {
-		compatible = "sdw20217020400";
-		reg = <0 1>;
-		reset-gpios = <&lpass_tlmm 12 GPIO_ACTIVE_LOW>;
-		#sound-dai-cells = <0>;
-		sound-name-prefix = "TweeterLeft";
-		vdd-1p8-supply = <&vreg_l15b_1p8>;
-		vdd-io-supply = <&vreg_l12b_1p2>;
-		qcom,port-mapping = <4 5 6 7 11 13>;
+		#thermal-sensor-cells = <0>;
+		sound-name-prefix = "SpkrLeft";
+		vdd-supply = <&vreg_l15b_1p8>;
+		qcom,port-mapping = <1 2 3 7>;
 	};
 };
 
@@ -1172,33 +1175,20 @@
 	pinctrl-0 = <&wsa2_swr_active>, <&spkr_23_sd_n_active>;
 	pinctrl-names = "default";
 
-	/* WSA8845, Right Woofer */
-	right_woofer: speaker@0,0 {
-		compatible = "sdw20217020400";
-		reg = <0 0>;
+	right_spkr: speaker@0,2 {
+		compatible = "sdw10217020200";
+		reg = <0 2>;
 		reset-gpios = <&lpass_tlmm 13 GPIO_ACTIVE_LOW>;
 		#sound-dai-cells = <0>;
-		sound-name-prefix = "WooferRight";
-		vdd-1p8-supply = <&vreg_l15b_1p8>;
-		vdd-io-supply = <&vreg_l12b_1p2>;
-		qcom,port-mapping = <1 2 3 7 10 13>;
-	};
-
-	/* WSA8845, Right Tweeter */
-	right_tweeter: speaker@0,1 {
-		compatible = "sdw20217020400";
-		reg = <0 1>;
-		reset-gpios = <&lpass_tlmm 13 GPIO_ACTIVE_LOW>;
-		#sound-dai-cells = <0>;
-		sound-name-prefix = "TweeterRight";
-		vdd-1p8-supply = <&vreg_l15b_1p8>;
-		vdd-io-supply = <&vreg_l12b_1p2>;
-		qcom,port-mapping = <4 5 6 7 11 13>;
+		#thermal-sensor-cells = <0>;
+		sound-name-prefix = "SpkrRight";
+		vdd-supply = <&vreg_l15b_1p8>;
+		qcom,port-mapping = <1 2 3 7>;
 	};
 };
 
 &tlmm {
-	gpio-reserved-ranges = <34 2>, /* Unused */
+	gpio-reserved-ranges = <35 1>, /* Unused */
 			       <44 4>; /* SPI (TPM) */
 
 	edp_reg_en: edp-reg-en-state {
@@ -1298,18 +1288,9 @@
 	};
 
 	ts0_default: ts0-default-state {
-		int-n-pins {
-			pins = "gpio51";
-			function = "gpio";
-			bias-disable;
-		};
-
-		reset-n-pins {
-			pins = "gpio48";
-			function = "gpio";
-			output-high;
-			drive-strength = <16>;
-		};
+		pins = "gpio34";
+		function = "gpio";
+		bias-disable;
 	};
 
 	usb_1_ss0_sbu_default: usb-1-ss0-sbu-state {
@@ -1443,15 +1424,16 @@
 };
 
 &usb_1_ss0 {
-	dr_mode = "host";
+	dr_mode = "otg";
+	usb-role-switch;
 };
 
 &usb_1_ss0_dwc3_hs {
-	remote-endpoint = <&pmic_glink_ss0_hs_in>;
+	remote-endpoint = <&emuec_ss0_hs_in>;
 };
 
 &usb_1_ss0_qmpphy_out {
-	remote-endpoint = <&pmic_glink_ss0_ss_in>;
+	remote-endpoint = <&emuec_ss0_ss_in>;
 };
 
 &usb_1_ss1 {
@@ -1473,15 +1455,16 @@
 };
 
 &usb_1_ss1 {
-	dr_mode = "host";
+	dr_mode = "otg";
+	usb-role-switch;
 };
 
 &usb_1_ss1_dwc3_hs {
-	remote-endpoint = <&pmic_glink_ss1_hs_in>;
+	remote-endpoint = <&emuec_ss1_hs_in>;
 };
 
 &usb_1_ss1_qmpphy_out {
-	remote-endpoint = <&pmic_glink_ss1_ss_in>;
+	remote-endpoint = <&emuec_ss1_ss_in>;
 };
 
 &usb_1_ss2_qmpphy {
