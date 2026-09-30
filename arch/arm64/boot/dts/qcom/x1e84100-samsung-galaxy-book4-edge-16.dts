@@ -29,3 +29,28 @@
 &panel {
 	compatible = "samsung,atna60cl07", "samsung,atna33xc20";
 };
+
+/* MP0 goes to the USB-A port(USB3) and FPC */
+&usb_mp {
+	status = "okay";
+
+	/* Limit to single port */
+	phys = <&usb_mp_hsphy0>, <&usb_mp_qmpphy0>;
+	phy-names = "usb2-0", "usb3-0";
+};
+
+&usb_mp_hsphy0 {
+	vdd-supply = <&vreg_l2e_0p8>;
+	vdda12-supply = <&vreg_l3e_1p2>;
+
+	phys = <&eusb6_repeater>;
+
+	status = "okay";
+};
+
+&usb_mp_qmpphy0 {
+	vdda-phy-supply = <&vreg_l3e_1p2>;
+	vdda-pll-supply = <&vreg_l3c_0p8>;
+
+	status = "okay";
+};
