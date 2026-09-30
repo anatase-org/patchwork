@@ -2,6 +2,7 @@
 
 # Build an arm64 kernel and boot it once on a remote bootc machine. The UKI
 # follows redhat/kernel.spec.template's Qualcomm DTB auto-selection rules.
+# If EFI variables are unavailable, GRUB chainloads the same UKI once.
 # Build in this source tree, replacing its current in-tree kernel config.
 
 set -euo pipefail
@@ -226,7 +227,78 @@ done
 scp "$STAGE_DIR/ukernel-arm.efi" "$HOST:/tmp/ukernel-arm.efi"
 ssh "$HOST" /bin/bash -s <<'REMOTE_BOOT'
 set -euo pipefail
+
 sudo -n install -m 0644 /tmp/ukernel-arm.efi /boot/efi/EFI/ukernel-arm.efi
+
+if ! sudo -n efibootmgr -v >/dev/null 2>&1; then
+    echo 'EFI variables unavailable; preparing a one-shot GRUB UKI entry.'
+    for tool in grub2-reboot grub2-script-check findmnt; do
+        command -v "$tool" >/dev/null || {
+            echo "GRUB test requires $tool" >&2
+            exit 1
+        }
+    done
+    sudo -n grep -Fq 'source $prefix/custom.cfg' /boot/grub2/grub.cfg || {
+        echo 'GRUB does not source /boot/grub2/custom.cfg' >&2
+        exit 1
+    }
+    [[ -f /usr/lib/grub/arm64-efi/chain.mod ]] || {
+        echo 'GRUB UKI fallback requires the matching grub2-efi-aa64-modules package' >&2
+        exit 1
+    }
+    # The other dependencies are built into the installed GRUB image.
+    sudo -n install -d -m 0755 /boot/grub2/arm64-efi
+    sudo -n install -m 0644 /usr/lib/grub/arm64-efi/chain.mod /boot/grub2/arm64-efi/
+
+    esp_uuid=$(findmnt -n -o UUID --mountpoint /boot/efi)
+    [[ $esp_uuid =~ ^[[:xdigit:]-]+$ ]] || {
+        echo 'Invalid EFI filesystem UUID' >&2
+        exit 1
+    }
+
+    temp_dir=$(mktemp -d)
+    trap 'rm -rf -- "$temp_dir"' EXIT
+    cat > "$temp_dir/menu.cfg" <<EOF
+# Consume the request before handing control to the UKI.
+if [ "\${next_entry}" = sync-arm ]; then
+    unset next_entry
+    if [ "\${env_block}" ]; then
+        if save_env -f "\${env_block}" next_entry; then
+            set default=sync-arm
+        fi
+    else
+        if save_env next_entry; then
+            set default=sync-arm
+        fi
+    fi
+fi
+
+menuentry 'Custom ARM Kernel' --id sync-arm {
+    insmod part_gpt
+    insmod fat
+    insmod chain
+    # Keep root on /boot so stock entries still work if chainloading fails.
+    search --no-floppy --fs-uuid --set=sync_arm_esp $esp_uuid
+    chainloader (\${sync_arm_esp})/EFI/ukernel-arm.efi
+}
+EOF
+    if [[ -f /boot/grub2/custom.cfg ]]; then
+        sudo -n cat /boot/grub2/custom.cfg > "$temp_dir/custom.cfg"
+    else
+        : > "$temp_dir/custom.cfg"
+    fi
+    if ! grep -Fxq 'source $prefix/sync-arm.cfg' "$temp_dir/custom.cfg"; then
+        printf '\nsource $prefix/sync-arm.cfg\n' >> "$temp_dir/custom.cfg"
+    fi
+    grub2-script-check "$temp_dir/menu.cfg"
+    grub2-script-check "$temp_dir/custom.cfg"
+    sudo -n install -m 0644 "$temp_dir/menu.cfg" /boot/grub2/sync-arm.cfg
+    sudo -n install -m 0644 "$temp_dir/custom.cfg" /boot/grub2/custom.cfg
+    sudo -n grub2-reboot sync-arm
+    echo 'GRUB test prepared; rebooting into the UKI once.'
+    sudo -n systemctl reboot --no-block
+    exit 0
+fi
 
 find_bootnum() {
     local line
