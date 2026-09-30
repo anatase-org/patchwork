@@ -781,16 +781,17 @@ static void samsung_emuec_sync(struct work_struct *work)
 	source_path_attached = bc & BIT(4);
 	consumer_path_active = sw & BIT(1);
 
-	if (orientation == TYPEC_ORIENTATION_NONE ||
-	    (!vbus_present && !source_path_attached)) {
+	if (orientation == TYPEC_ORIENTATION_NONE) {
 		samsung_emuec_detach(pdic);
 		return;
 	}
 
-	/* The BC and PD role bits can settle at different times. */
-	if ((power_role == TYPEC_SOURCE && !source_path_attached) ||
-	    (power_role == TYPEC_SINK && !vbus_present))
+	/* A sink needs external VBUS; a source may need its path enabled first. */
+	if (power_role == TYPEC_SINK && !vbus_present) {
+		mod_delayed_work(system_dfl_wq, &pdic->work,
+				 msecs_to_jiffies(150));
 		return;
+	}
 
 	mode = power_role == TYPEC_SOURCE ? SAMSUNG_EMUEC_MODE_PROVIDER :
 					    SAMSUNG_EMUEC_MODE_CONSUMER;
@@ -809,15 +810,18 @@ static void samsung_emuec_sync(struct work_struct *work)
 				 "failed to enable %s path: %d\n",
 				 mode == SAMSUNG_EMUEC_MODE_PROVIDER ?
 				 "provider" : "consumer", ret);
-		else {
+		else
 			pdic->attempted_mode = mode;
-			mod_delayed_work(system_dfl_wq, &pdic->work,
-					 msecs_to_jiffies(150));
-		}
 	}
 
-	if (!(sw & status_bit))
+	if (!(sw & status_bit) ||
+	    (power_role == TYPEC_SOURCE && !source_path_attached)) {
+		/* Keep checking until the requested power path becomes active. */
+		if (pdic->attempted_mode == mode)
+			mod_delayed_work(system_dfl_wq, &pdic->work,
+					 msecs_to_jiffies(150));
 		return;
+	}
 
 	if (pdic->attached && (pdic->power_role != power_role ||
 			       pdic->data_role != data_role))

@@ -24043,6 +24043,13 @@ L:	linux-fbdev@vger.kernel.org
 S:	Maintained
 F:	drivers/video/fbdev/s3c-fb.c
 
+SAMSUNG GALAXY BOOK ARM64 EMBEDDED CONTROLLER DRIVER
+M:	Antheas Kapenekakis <lkml@antheas.dev>
+L:	linux-arm-msm@vger.kernel.org
+S:	Maintained
+F:	Documentation/devicetree/bindings/embedded-controller/samsung,galaxybook4-edge-ec.yaml
+F:	drivers/platform/arm64/samsung-galaxybook-ec.c
+
 SAMSUNG GALAXY BOOK DRIVER
 M:	Joshua Grisham <josh@joshuagrisham.com>
 L:	platform-driver-x86@vger.kernel.org
