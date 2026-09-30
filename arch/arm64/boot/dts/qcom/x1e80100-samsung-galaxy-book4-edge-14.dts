@@ -2,7 +2,7 @@
 
 /dts-v1/;
 
-#include "x1-samsung-galaxy-book4-edge.dtsi"
+#include "x1e-samsung-galaxy-book4-edge.dtsi"
 
 / {
 	model = "Samsung Galaxy Book4 Edge (14 inch)";
