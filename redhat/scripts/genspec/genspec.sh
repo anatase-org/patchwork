@@ -129,9 +129,9 @@ test -f "$SOURCES/$SPECFILE" &&
 	/%%SPECCHANGELOG%%/r $clogf.stripped
 	/%%SPECCHANGELOG%%/d" "$SOURCES/$SPECFILE"
 
-git diff -p --binary --no-renames --stat "$MARKER".."$FMARKER" $EXCLUDE_FILES \
+git diff -p --binary --full-index --no-renames --stat "$MARKER".."$FMARKER" $EXCLUDE_FILES \
 	> ${SOURCES}/patch-1-redhat.patch
-git format-patch --stdout --zero-commit -k "$FMARKER"  --no-renames -- $EXCLUDE_FILES \
+git format-patch --stdout --zero-commit --full-index -k "$FMARKER"  --no-renames -- $EXCLUDE_FILES \
 	> ${SOURCES}/patch-2-anatase.patch
 
 rm -rf ${SOURCES}/patch-3-akmods.patch
