@@ -9,6 +9,7 @@
 #include "dpu_encoder_phys.h"
 #include "dpu_hw_interrupts.h"
 #include "dpu_hw_pingpong.h"
+#include "dpu_hw_merge3d.h"
 #include "dpu_core_irq.h"
 #include "dpu_formats.h"
 #include "dpu_trace.h"
@@ -66,6 +67,8 @@ static void _dpu_encoder_phys_cmd_update_intf_cfg(
 	intf_cfg.stream_sel = cmd_enc->stream_sel;
 	intf_cfg.mode_3d = dpu_encoder_helper_get_3d_blend_mode(phys_enc);
 	intf_cfg.dsc = dpu_encoder_helper_get_dsc(phys_enc);
+	if (intf_cfg.mode_3d && phys_enc->hw_pp->merge_3d)
+		intf_cfg.merge_3d = phys_enc->hw_pp->merge_3d->idx;
 	ctl->ops.setup_intf_cfg(ctl, &intf_cfg);
 
 	/* setup which pp blk will connect to this intf */
@@ -74,6 +77,10 @@ static void _dpu_encoder_phys_cmd_update_intf_cfg(
 		phys_enc->hw_intf->ops.bind_pingpong_blk(
 				phys_enc->hw_intf,
 				phys_enc->hw_pp->idx);
+
+	if (phys_enc->hw_pp->merge_3d)
+		phys_enc->hw_pp->merge_3d->ops.setup_3d_mode(phys_enc->hw_pp->merge_3d,
+							    intf_cfg.mode_3d);
 
 	if (intf_cfg.dsc != 0)
 		cmd_mode_cfg.data_compress = true;
@@ -453,11 +460,14 @@ static void dpu_encoder_phys_cmd_enable_helper(
 		struct dpu_encoder_phys *phys_enc)
 {
 	struct dpu_hw_ctl *ctl;
+	u32 mode_3d;
 
 	if (!phys_enc->hw_pp) {
 		DPU_ERROR("invalid arg(s), encoder %d\n", phys_enc != NULL);
 		return;
 	}
+
+	mode_3d = dpu_encoder_helper_get_3d_blend_mode(phys_enc);
 
 	dpu_encoder_helper_split_config(phys_enc, phys_enc->hw_intf->idx);
 
@@ -465,6 +475,9 @@ static void dpu_encoder_phys_cmd_enable_helper(
 
 	ctl = phys_enc->hw_ctl;
 	ctl->ops.update_pending_flush_intf(ctl, phys_enc->hw_intf->idx);
+	if (mode_3d && ctl->ops.update_pending_flush_merge_3d &&
+	    phys_enc->hw_pp->merge_3d)
+		ctl->ops.update_pending_flush_merge_3d(ctl, phys_enc->hw_pp->merge_3d->idx);
 }
 
 static void dpu_encoder_phys_cmd_enable(struct dpu_encoder_phys *phys_enc)
