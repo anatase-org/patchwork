@@ -101,22 +101,51 @@ static s32 bdo_scale_stick(u8 value)
 	return DIV_ROUND_CLOSEST((s32)(value - 0x7f) * 32767, 0x80);
 }
 
-static void bdo_report_dpad(struct input_dev *gamepad, u8 value)
+static void bdo_report_gamepad(struct bdo_device *bdo, u8 dpad,
+			       const u8 *sticks, u8 left_trigger,
+			       u8 right_trigger, u16 buttons)
 {
 	static const s8 directions[8][2] = {
 		{  0, -1 }, {  1, -1 }, {  1,  0 }, {  1,  1 },
 		{  0,  1 }, { -1,  1 }, { -1,  0 }, { -1, -1 },
 	};
+	struct input_dev *gamepad = bdo->gamepad;
 	s8 x = 0;
 	s8 y = 0;
 
-	if (value < ARRAY_SIZE(directions)) {
-		x = directions[value][0];
-		y = directions[value][1];
+	if (dpad < ARRAY_SIZE(directions)) {
+		x = directions[dpad][0];
+		y = directions[dpad][1];
 	}
 
 	input_report_abs(gamepad, ABS_HAT0X, x);
 	input_report_abs(gamepad, ABS_HAT0Y, y);
+	input_report_abs(gamepad, ABS_X, bdo_scale_stick(sticks[0]));
+	input_report_abs(gamepad, ABS_Y, bdo_scale_stick(sticks[1]));
+	input_report_abs(gamepad, ABS_RX, bdo_scale_stick(sticks[2]));
+	input_report_abs(gamepad, ABS_RY, bdo_scale_stick(sticks[3]));
+	input_report_abs(gamepad, ABS_Z, left_trigger);
+	input_report_abs(gamepad, ABS_RZ, right_trigger);
+
+	/* Match SDL's final per-model mapping in Xbox A/B/X/Y button order. */
+	if (bdo->model == BDO_ULTIMATE2 || bdo->model == BDO_ULTIMATE3) {
+		input_report_key(gamepad, BTN_A, buttons & BIT(0));
+		input_report_key(gamepad, BTN_B, buttons & BIT(1));
+		input_report_key(gamepad, BTN_X, buttons & BIT(3));
+		input_report_key(gamepad, BTN_Y, buttons & BIT(4));
+	} else {
+		input_report_key(gamepad, BTN_A, buttons & BIT(1));
+		input_report_key(gamepad, BTN_B, buttons & BIT(0));
+		input_report_key(gamepad, BTN_X, buttons & BIT(4));
+		input_report_key(gamepad, BTN_Y, buttons & BIT(3));
+	}
+	input_report_key(gamepad, BTN_TL, buttons & BIT(6));
+	input_report_key(gamepad, BTN_TR, buttons & BIT(7));
+	input_report_key(gamepad, BTN_SELECT, buttons & BIT(10));
+	input_report_key(gamepad, BTN_START, buttons & BIT(11));
+	input_report_key(gamepad, BTN_MODE, buttons & BIT(12));
+	input_report_key(gamepad, BTN_THUMBL, buttons & BIT(13));
+	input_report_key(gamepad, BTN_THUMBR, buttons & BIT(14));
 }
 
 static void bdo_report_enhanced_gamepad(struct bdo_device *bdo,
@@ -127,30 +156,12 @@ static void bdo_report_enhanced_gamepad(struct bdo_device *bdo,
 	if (!gamepad || size < BDO_STATE_MIN_SIZE)
 		return;
 
-	bdo_report_dpad(gamepad, data[1]);
-	input_report_abs(gamepad, ABS_X, bdo_scale_stick(data[2]));
-	input_report_abs(gamepad, ABS_Y, bdo_scale_stick(data[3]));
-	input_report_abs(gamepad, ABS_RX, bdo_scale_stick(data[4]));
-	input_report_abs(gamepad, ABS_RY, bdo_scale_stick(data[5]));
-	input_report_abs(gamepad, ABS_Z, data[7]);
-	input_report_abs(gamepad, ABS_RZ, data[6]);
-
-	input_report_key(gamepad, BTN_A, data[8] & BIT(1));
-	input_report_key(gamepad, BTN_B, data[8] & BIT(0));
-	input_report_key(gamepad, BTN_X, data[8] & BIT(4));
-	input_report_key(gamepad, BTN_Y, data[8] & BIT(3));
-	input_report_key(gamepad, BTN_TL, data[8] & BIT(6));
-	input_report_key(gamepad, BTN_TR, data[8] & BIT(7));
+	bdo_report_gamepad(bdo, data[1], data + 2, data[7], data[6],
+			   get_unaligned_le16(data + 8));
 	if (bdo->model != BDO_SF30_SN30) {
 		input_report_key(gamepad, BTN_GRIPL, data[8] & BIT(5));
 		input_report_key(gamepad, BTN_GRIPR, data[8] & BIT(2));
 	}
-
-	input_report_key(gamepad, BTN_SELECT, data[9] & BIT(2));
-	input_report_key(gamepad, BTN_START, data[9] & BIT(3));
-	input_report_key(gamepad, BTN_MODE, data[9] & BIT(4));
-	input_report_key(gamepad, BTN_THUMBL, data[9] & BIT(5));
-	input_report_key(gamepad, BTN_THUMBR, data[9] & BIT(6));
 
 	if (bdo->model != BDO_SF30_SN30 && size > 10) {
 		input_report_key(gamepad, BTN_GRIPL2, data[10] & BIT(0));
@@ -171,26 +182,12 @@ static void bdo_report_standard_gamepad(struct bdo_device *bdo,
 	if (!gamepad || size < 10)
 		return;
 
-	bdo_report_dpad(gamepad, data[1] & 0x0f);
-	input_report_abs(gamepad, ABS_X, bdo_scale_stick(data[2]));
-	input_report_abs(gamepad, ABS_Y, bdo_scale_stick(data[3]));
-	input_report_abs(gamepad, ABS_RX, bdo_scale_stick(data[4]));
-	input_report_abs(gamepad, ABS_RY, bdo_scale_stick(data[5]));
-	input_report_abs(gamepad, ABS_Z, data[7]);
-	input_report_abs(gamepad, ABS_RZ, data[6]);
-
 	buttons = get_unaligned_le16(data + 8);
-	input_report_key(gamepad, BTN_A, buttons & BIT(1));
-	input_report_key(gamepad, BTN_B, buttons & BIT(0));
-	input_report_key(gamepad, BTN_X, buttons & BIT(4));
-	input_report_key(gamepad, BTN_Y, buttons & BIT(3));
-	input_report_key(gamepad, BTN_TL, buttons & BIT(6));
-	input_report_key(gamepad, BTN_TR, buttons & BIT(7));
-	input_report_key(gamepad, BTN_SELECT, buttons & BIT(10));
-	input_report_key(gamepad, BTN_START, buttons & BIT(11));
-	input_report_key(gamepad, BTN_MODE, buttons & (BIT(2) | BIT(12)));
-	input_report_key(gamepad, BTN_THUMBL, buttons & BIT(13));
-	input_report_key(gamepad, BTN_THUMBR, buttons & BIT(14));
+	/* Standard reports may also put the guide button in bit 2. */
+	if (buttons & BIT(2))
+		buttons |= BIT(12);
+	bdo_report_gamepad(bdo, data[1] & 0x0f, data + 2, data[7], data[6],
+			   buttons);
 	input_sync(gamepad);
 }
 
@@ -202,25 +199,10 @@ static void bdo_report_legacy_gamepad(struct bdo_device *bdo,
 	if (!gamepad || size != 9)
 		return;
 
-	bdo_report_dpad(gamepad, data[2]);
-	input_report_abs(gamepad, ABS_X, bdo_scale_stick(data[3]));
-	input_report_abs(gamepad, ABS_Y, bdo_scale_stick(data[4]));
-	input_report_abs(gamepad, ABS_RX, bdo_scale_stick(data[5]));
-	input_report_abs(gamepad, ABS_RY, bdo_scale_stick(data[6]));
-	input_report_abs(gamepad, ABS_Z, (data[1] & BIT(0)) ? 255 : 0);
-	input_report_abs(gamepad, ABS_RZ, (data[1] & BIT(1)) ? 255 : 0);
-
-	input_report_key(gamepad, BTN_A, data[0] & BIT(1));
-	input_report_key(gamepad, BTN_B, data[0] & BIT(0));
-	input_report_key(gamepad, BTN_X, data[0] & BIT(4));
-	input_report_key(gamepad, BTN_Y, data[0] & BIT(3));
-	input_report_key(gamepad, BTN_TL, data[0] & BIT(6));
-	input_report_key(gamepad, BTN_TR, data[0] & BIT(7));
-	input_report_key(gamepad, BTN_SELECT, data[1] & BIT(2));
-	input_report_key(gamepad, BTN_START, data[1] & BIT(3));
-	input_report_key(gamepad, BTN_MODE, data[1] & BIT(4));
-	input_report_key(gamepad, BTN_THUMBL, data[1] & BIT(5));
-	input_report_key(gamepad, BTN_THUMBR, data[1] & BIT(6));
+	bdo_report_gamepad(bdo, data[2], data + 3,
+			   (data[1] & BIT(0)) ? 255 : 0,
+			   (data[1] & BIT(1)) ? 255 : 0,
+			   get_unaligned_le16(data));
 	input_sync(gamepad);
 }
 
