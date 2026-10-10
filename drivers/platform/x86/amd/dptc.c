@@ -185,6 +185,7 @@ static const char * const dptc_soc_table[] = {
 	"AMD RYZEN AI MAX 385",
 	"AMD RYZEN AI MAX 380",
 	/* Ryzen AI */
+	"AMD Ryzen AI 9 HX 470",
 	"AMD Ryzen AI 9 HX 370",
 	/* Ryzen 8000 */
 	"AMD Ryzen 7 8840U",
@@ -566,6 +567,15 @@ static const struct dmi_system_id dptc_dmi_table[] = {
 		.matches = {
 			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
 			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AYANEO 3"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	/* KONKR - 30W */
+	{
+		.ident = "KONKR FIT",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "KONKR"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "KONKR FIT"),
 		},
 		.driver_data = (void *)&limits_30w,
 	},
