@@ -191,6 +191,7 @@ static const char * const dptc_soc_table[] = {
 	"AMD Ryzen 7 8840U",
 	/* Ryzen 7040 */
 	"AMD Ryzen 7 7840U",
+	"AMD Ryzen 5 7640U",
 	/* Ryzen 6000 */
 	"AMD Ryzen 7 6800U",
 	"AMD Ryzen 7 6600U",
