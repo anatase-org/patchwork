@@ -569,6 +569,15 @@ static const struct dmi_system_id dptc_dmi_table[] = {
 		},
 		.driver_data = (void *)&limits_30w,
 	},
+	/* AYANEO AI MAX handhelds */
+	{
+		.ident = "AYANEO NEXT 2",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_BOARD_VENDOR, "AYA"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AB09"),
+		},
+		.driver_data = (void *)&limits_maxhh,
+	},
 	{ }
 };
 MODULE_DEVICE_TABLE(dmi, dptc_dmi_table);
