@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/display/panel/ilitek,il97680a.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Ilitek IL97680A based DSI panels
+
+maintainers:
+  - Teguh Sobirin <teguh@sobir.in>
+
+description:
+  The Ilitek IL97680A is a DSI display driver IC driving the 1280x960
+  command mode panels of the RetroidPocket handhelds.
+
+allOf:
+  - $ref: panel-common.yaml#
+
+properties:
+  compatible:
+    enum:
+      - retroidpocket,rpduo-panel-bottom
+      - retroidpocket,rpnova-panel
+
+  reg:
+    maxItems: 1
+
+  vdd-supply:
+    description: Core voltage supply
+
+  vddio-supply:
+    description: I/O voltage supply
+
+  vci-supply:
+    description: Analog voltage supply
+
+  vdd18-supply:
+    description: 1.8V supply of the panel module
+
+  vdd28-supply:
+    description: 2.8V supply of the panel module
+
+  reset-gpios: true
+  rotation: true
+  port: true
+
+required:
+  - compatible
+  - reg
+  - vdd-supply
+  - vddio-supply
+  - vci-supply
+  - reset-gpios
+  - port
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/gpio/gpio.h>
+
+    dsi {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        panel@0 {
+            compatible = "retroidpocket,rpnova-panel";
+            reg = <0>;
+
+            vdd-supply = <&vreg_l11b_1p2>;
+            vddio-supply = <&vreg_l12b_1p8>;
+            vci-supply = <&vreg_l13b_3p0>;
+            vdd18-supply = <&vdd_disp_1v8>;
+            vdd28-supply = <&vdd_disp_2v8>;
+
+            reset-gpios = <&tlmm 133 GPIO_ACTIVE_LOW>;
+
+            port {
+                panel_in: endpoint {
+                    remote-endpoint = <&dsi0_out>;
+                };
+            };
+        };
+    };
+...
