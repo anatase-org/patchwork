@@ -9,12 +9,14 @@ title: Visionox VTDR6130 AMOLED DSI Panel
 maintainers:
   - Neil Armstrong <neil.armstrong@linaro.org>
 
-allOf:
-  - $ref: panel-common.yaml#
-
 properties:
   compatible:
-    const: visionox,vtdr6130
+    oneOf:
+      - const: visionox,vtdr6130
+      - description: RetroidPocket panels with the VTDR6130 driver IC
+        enum:
+          - retroidpocket,rp6-panel
+          - retroidpocket,rpduo-panel-top
 
   reg:
     maxItems: 1
@@ -23,8 +25,13 @@ properties:
   vddio-supply: true
   vci-supply: true
   vdd-supply: true
+  vdd18-supply:
+    description: 1.8V supply of the panel module
+  vdd28-supply:
+    description: 2.8V supply of the panel module
   port: true
   reset-gpios: true
+  rotation: true
 
 required:
   - compatible
@@ -34,6 +41,18 @@ required:
   - vdd-supply
   - reset-gpios
   - port
+
+allOf:
+  - $ref: panel-common.yaml#
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: visionox,vtdr6130
+    then:
+      properties:
+        vdd18-supply: false
+        vdd28-supply: false
 
 additionalProperties: false
 
