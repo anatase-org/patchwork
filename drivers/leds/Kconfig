@@ -227,6 +227,18 @@ config LEDS_EL15203000
 	  To compile this driver as a module, choose M here: the module
 	  will be called leds-el15203000.
 
+config LEDS_HTR3212
+	tristate "LED support for HEROIC HTR3212"
+	depends on LEDS_CLASS && I2C && OF
+	select REGMAP_I2C
+	help
+	  This option enables support for the HEROIC HTR3212 12-channel
+	  LED controller with 8-bit PWM brightness control, connected
+	  over I2C.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called leds-htr3212.
+
 config LEDS_TURRIS_OMNIA
 	tristate "LED support for CZ.NIC's Turris Omnia"
 	depends on LEDS_CLASS_MULTICOLOR
