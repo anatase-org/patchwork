@@ -161,6 +161,21 @@ static const struct dptc_device_limits limits_30w = {
 	},
 };
 
+/* 54W class: Ayaneo Kun (max TDP supported by the platform) */
+static const struct dptc_device_limits limits_54w = {
+	.params = {
+		[DPTC_PPT_PL1_SPL]  = {  1,  4, 15, 54,  54 },
+		[DPTC_PPT_PL2_SPPT] = {  1,  4, 20, 54,  54 },
+		[DPTC_PPT_PL3_FPPT] = {  1,  4, 25, 54,  54 },
+		[DPTC_CPU_TEMP]     = { 60, 70, 85, 90, 100 },
+	},
+	.profiles = {
+		[PLATFORM_PROFILE_LOW_POWER]   = { .vals = {  8,  8, 12, 0 } },
+		[PLATFORM_PROFILE_BALANCED]    = { .vals = { 15, 17, 25, 0 } },
+		[PLATFORM_PROFILE_PERFORMANCE] = { .vals = { 25, 28, 41, 0 } },
+	},
+};
+
 /* AI MAX Handheld class: GPD Win 5 */
 static const struct dptc_device_limits limits_maxhh = {
 	.params = {
@@ -503,22 +518,6 @@ static const struct dmi_system_id dptc_dmi_table[] = {
 		},
 		.driver_data = (void *)&limits_25w,
 	},
-	{
-		.ident = "AYANEO KUN",
-		.matches = {
-			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
-			DMI_EXACT_MATCH(DMI_BOARD_NAME, "KUN"),
-		},
-		.driver_data = (void *)&limits_25w,
-	},
-	{
-		.ident = "AYANEO KUN",
-		.matches = {
-			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
-			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AYANEO KUN"),
-		},
-		.driver_data = (void *)&limits_25w,
-	},
 	/* AYANEO - 28W */
 	{
 		.ident = "AYANEO 2",
@@ -571,7 +570,6 @@ static const struct dmi_system_id dptc_dmi_table[] = {
 		},
 		.driver_data = (void *)&limits_30w,
 	},
-	/* KONKR - 30W */
 	{
 		.ident = "KONKR FIT",
 		.matches = {
@@ -579,6 +577,23 @@ static const struct dmi_system_id dptc_dmi_table[] = {
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "KONKR FIT"),
 		},
 		.driver_data = (void *)&limits_30w,
+	},
+	/* AYANEO 54W APU */
+	{
+		.ident = "AYANEO KUN",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "KUN"),
+		},
+		.driver_data = (void *)&limits_54w,
+	},
+	{
+		.ident = "AYANEO KUN",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AYANEO KUN"),
+		},
+		.driver_data = (void *)&limits_54w,
 	},
 	/* AYANEO AI MAX handhelds */
 	{
