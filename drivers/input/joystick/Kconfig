@@ -383,6 +383,17 @@ config JOYSTICK_QWIIC
 	  To compile this driver as a module, choose M here: the
 	  module will be called qwiic-joystick.
 
+config JOYSTICK_RSINPUT
+	tristate "AYN and Retroid Pocket UART gamepad support"
+	depends on SERIAL_DEV_BUS
+	help
+	  Say Y here if you want to use the built-in gamepad of AYN and
+	  Retroid Pocket handhelds. The gamepad controller is attached to
+	  a UART.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called rsinput.
+
 config JOYSTICK_FSIA6B
 	tristate "FlySky FS-iA6B RC Receiver"
 	select SERIO
