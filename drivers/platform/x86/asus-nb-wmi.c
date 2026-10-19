@@ -603,6 +603,15 @@ static const struct dmi_system_id asus_quirks[] = {
 		},
 		.driver_data = (void *)&quirk_ally,
 	},
+	{
+		.callback = dmi_matched,
+		.ident = "ASUS ROG Xbox Ally X20",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "ASUS"),
+			DMI_MATCH(DMI_BOARD_NAME, "RC74XA"),
+		},
+		.driver_data = (void *)&quirk_ally,
+	},
 	{},
 };
 
