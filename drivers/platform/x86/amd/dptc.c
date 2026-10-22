@@ -146,11 +146,26 @@ static const struct dptc_device_limits limits_28w = {
 	},
 };
 
-/* 30W class: OneXPlayer, AYANEO FLIP/GEEK/SLIDE/3, AOKZOE */
+/* 30W class: OneXPlayer, AYANEO FLIP/GEEK/SLIDE, AOKZOE */
 static const struct dptc_device_limits limits_30w = {
 	.params = {
 		[DPTC_PPT_PL1_SPL]  = {  1,  4, 15, 30,  40 },
 		[DPTC_PPT_PL2_SPPT] = {  1,  4, 20, 32,  43 },
+		[DPTC_PPT_PL3_FPPT] = {  1,  4, 25, 41,  50 },
+		[DPTC_CPU_TEMP]     = { 60, 70, 85, 90, 100 },
+	},
+	.profiles = {
+		[PLATFORM_PROFILE_LOW_POWER]   = { .vals = {  8,  8, 12, 0 } },
+		[PLATFORM_PROFILE_BALANCED]    = { .vals = { 15, 17, 25, 0 } },
+		[PLATFORM_PROFILE_PERFORMANCE] = { .vals = { 25, 28, 41, 0 } },
+	},
+};
+
+/* 35W class: AYANEO 3 */
+static const struct dptc_device_limits limits_35w = {
+	.params = {
+		[DPTC_PPT_PL1_SPL]  = {  1,  4, 15, 35,  40 },
+		[DPTC_PPT_PL2_SPPT] = {  1,  4, 20, 37,  43 },
 		[DPTC_PPT_PL3_FPPT] = {  1,  4, 25, 41,  50 },
 		[DPTC_CPU_TEMP]     = { 60, 70, 85, 90, 100 },
 	},
@@ -563,20 +578,21 @@ static const struct dmi_system_id dptc_dmi_table[] = {
 		.driver_data = (void *)&limits_30w,
 	},
 	{
-		.ident = "AYANEO 3",
-		.matches = {
-			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
-			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AYANEO 3"),
-		},
-		.driver_data = (void *)&limits_30w,
-	},
-	{
 		.ident = "KONKR FIT",
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "KONKR"),
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "KONKR FIT"),
 		},
 		.driver_data = (void *)&limits_30w,
+	},
+	/* AYANEO - 35W */
+	{
+		.ident = "AYANEO 3",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AYANEO 3"),
+		},
+		.driver_data = (void *)&limits_35w,
 	},
 	/* AYANEO 54W APU */
 	{
