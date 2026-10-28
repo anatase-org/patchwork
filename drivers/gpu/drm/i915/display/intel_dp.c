@@ -5465,6 +5465,10 @@ void intel_dp_set_infoframes(struct intel_encoder *encoder,
 	if (!enable || !crtc_state->has_psr)
 		val &= ~VIDEO_DIP_ENABLE_VSC_HSW;
 
+	/* Reset the VSC select when disabling the SDPs, so it doesn't go stale */
+	if (!enable)
+		val &= ~VSC_SELECT_MASK;
+
 	intel_de_write(display, reg, val);
 	intel_de_posting_read(display, reg);
 

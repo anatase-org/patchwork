@@ -524,6 +524,12 @@ void hsw_write_infoframe(struct intel_encoder *encoder,
 	const u32 *data = frame;
 	enum transcoder cpu_transcoder = crtc_state->cpu_transcoder;
 	intel_reg_t ctl_reg = HSW_TVIDEO_DIP_CTL(display, cpu_transcoder);
+	/*
+	 * On Xe2_LPD+ the packet registers are clock crossed to the transcoder
+	 * clock domain on the write of the packet header (dword 0), so the
+	 * header must be written after all the data.
+	 */
+	bool hdr_last = DISPLAY_VER(display) >= 20 && len > 0;
 	int data_size;
 	int i;
 	u32 val = intel_de_read(display, ctl_reg);
@@ -535,25 +541,30 @@ void hsw_write_infoframe(struct intel_encoder *encoder,
 	val &= ~hsw_infoframe_enable(type);
 	intel_de_write(display, ctl_reg, val);
 
-	for (i = 0; i < len; i += 4) {
+	for (i = hdr_last ? 4 : 0; i < len; i += 4)
 		intel_de_write(display,
 			       hsw_dip_data_reg(display, cpu_transcoder, type, i >> 2),
-			       *data);
-		data++;
-	}
+			       data[i >> 2]);
 	/* Write every possible data byte to force correct ECC calculation. */
 	for (; i < data_size; i += 4)
 		intel_de_write(display,
 			       hsw_dip_data_reg(display, cpu_transcoder, type, i >> 2),
 			       0);
+	if (hdr_last)
+		intel_de_write(display,
+			       hsw_dip_data_reg(display, cpu_transcoder, type, 0),
+			       data[0]);
 
 	/* Wa_14013475917 */
 	if (!(IS_DISPLAY_VER(display, 13, 14) && crtc_state->has_psr &&
 	      !crtc_state->has_panel_replay && type == DP_SDP_VSC))
 		val |= hsw_infoframe_enable(type);
 
-	if (type == DP_SDP_VSC)
+	if (type == DP_SDP_VSC) {
+		/* VSC_SELECT is a two bit field, don't OR into a stale value */
+		val &= ~VSC_SELECT_MASK;
 		val |= VSC_DIP_HW_DATA_SW_HEA;
+	}
 
 	intel_de_write(display, ctl_reg, val);
 	intel_de_posting_read(display, ctl_reg);
