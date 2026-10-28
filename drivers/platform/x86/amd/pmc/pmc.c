@@ -931,6 +931,9 @@ static int amd_pmc_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, dev);
 	if (IS_ENABLED(CONFIG_SUSPEND)) {
+		/* Allow GPD controllers to settle after Modern Standby entry. */
+		amd_pmc_s2idle_dev_ops.begin_delay =
+			!disable_workarounds && dmi_match(DMI_SYS_VENDOR, "GPD") ? 500 : 0;
 		err = acpi_register_lps0_dev(&amd_pmc_s2idle_dev_ops);
 		if (err)
 			dev_warn(dev->dev, "failed to register LPS0 sleep handler, expect increased power consumption\n");
