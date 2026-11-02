@@ -100,6 +100,14 @@ static void quirk_disable_psr2(struct intel_display *display)
 	drm_info(display->drm, "PSR2 support not currently available for this setup, applying disable PSR2 quirk\n");
 }
 
+static void quirk_disable_psr_and_lobf(struct intel_display *display)
+{
+	display->params.enable_psr = 0;
+	display->params.enable_panel_replay = 0;
+	intel_set_quirk(display, QUIRK_DISABLE_LOBF);
+	drm_info(display->drm, "Disabling PSR, Panel Replay and LOBF\n");
+}
+
 struct intel_quirk {
 	int device;
 	int subsystem_vendor;
@@ -187,6 +195,18 @@ static const struct intel_dmi_quirk intel_dmi_quirks[] = {
 			{ }
 		},
 		.hook = quirk_no_pps_backlight_power_hook,
+	},
+	{
+		.dmi_id_list = &(const struct dmi_system_id[]) {
+			{
+				.matches = {
+					DMI_MATCH(DMI_SYS_VENDOR, "ONE-NETBOOK"),
+					DMI_MATCH(DMI_PRODUCT_NAME, "ONEXPLAYER 3"),
+				},
+			},
+			{ }
+		},
+		.hook = quirk_disable_psr_and_lobf,
 	},
 };
 

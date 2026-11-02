@@ -16,6 +16,7 @@
 #include "intel_dp_aux.h"
 #include "intel_psr.h"
 #include "intel_psr_regs.h"
+#include "intel_quirks.h"
 #include "intel_vrr.h"
 
 #define SILENCE_PERIOD_MIN_TIME	80
@@ -326,8 +327,9 @@ void intel_alpm_lobf_compute_config(struct intel_dp *intel_dp,
 {
 	struct intel_display *display = to_intel_display(intel_dp);
 
-	if (intel_dp->alpm.lobf_disable_debug) {
-		drm_dbg_kms(display->drm, "LOBF is disabled by debug flag\n");
+	if (intel_dp->alpm.lobf_disable_debug ||
+	    intel_has_quirk(display, QUIRK_DISABLE_LOBF)) {
+		drm_dbg_kms(display->drm, "LOBF is disabled by debug flag or quirk\n");
 		return;
 	}
 
