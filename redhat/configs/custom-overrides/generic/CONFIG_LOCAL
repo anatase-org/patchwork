@@ -12,6 +12,11 @@ CONFIG_INPUT_FF_MEMLESS=y
 # CONFIG_HID_OXP is not set
 # CONFIG_HID_MSI is not set
 
+# Retroid drivers enabled by the ARM64 override
+# CONFIG_JOYSTICK_RSINPUT is not set
+# CONFIG_DRM_PANEL_ILITEK_IL97680A is not set
+# CONFIG_LEDS_HTR3212 is not set
+
 # Disable these for all arches except arm/x86
 # CONFIG_SND_SOC_AW87XXX is not set
 # CONFIG_JOYSTICK_ODIN2 is not set
