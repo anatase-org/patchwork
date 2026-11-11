@@ -18,12 +18,6 @@ fi
         dist=$1 
         relver=$2
 
-        # Make sure relver has a leading 0
-        if [ ${#relver} -eq 1 ]; then
-                relver="0$relver"
-        fi
-        relver="an$relver"
-
         git -C ../kernel-anatase pull
         rm -f ./redhat/rpm/SRPMS/kernel-*.src.rpm || true
         make -C redhat dist-clean
