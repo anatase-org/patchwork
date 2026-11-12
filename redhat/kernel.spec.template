@@ -3044,14 +3044,20 @@ BuildKernel() {
     if [[ -z "$Variant" || "$Variant" == "debug" ]]; then
 	%{log_msg "Setup the DTB-loader kernel"}
 	DtbloaderImage="$RPM_BUILD_ROOT/lib/modules/$KernelVer/$InstallName-dtbloader.efi"
-	DtbPath=$RPM_BUILD_ROOT/%{image_install_path}/dtb-$KernelVer/qcom
+	DtbPath=$RPM_BUILD_ROOT/%{image_install_path}/dtb-$KernelVer
 
 	pushd $DtbPath
 	Dtbs=""
-	for i in x1 sc8?80x; do
+	for i in qcom/x1 qcom/sc8?80x; do
 	    Dtbs="$Dtbs $(ls $i*.dtb | grep -v -E 'el2|devkit|crd|qcp|primus')"
 	done
 	popd
+
+	# Match Pi boards against the compatible string in the firmware DTB.
+	Dtbs="$Dtbs broadcom/bcm2711-rpi-4-b.dtb"
+	Dtbs="$Dtbs broadcom/bcm2712-rpi-5-b.dtb"
+	Dtbs="$Dtbs broadcom/bcm2712-d-rpi-5-b.dtb"
+	Dtbs="$Dtbs broadcom/bcm2712-rpi-500.dtb"
 
 	DevicetreeAuto=""
 	for i in $Dtbs; do
