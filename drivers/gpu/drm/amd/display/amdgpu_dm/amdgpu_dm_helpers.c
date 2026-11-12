@@ -1667,6 +1667,7 @@ void dm_helpers_dp_mst_update_branch_bandwidth(
 EXPORT_IF_KUNIT(dm_helpers_dp_mst_update_branch_bandwidth);
 
 STATIC_IFN_KUNIT const uint32_t dm_freesync_pcon_whitelist[] = {
+	DP_BRANCH_DEVICE_ID_BCBEFB,
 	DP_BRANCH_DEVICE_ID_0060AD,
 	DP_BRANCH_DEVICE_ID_00E04C,
 	DP_BRANCH_DEVICE_ID_90CC24,
