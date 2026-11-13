@@ -3,6 +3,7 @@
  * Copyright (C) 2026 InvenSense, Inc.
  */
 
+#include <linux/acpi.h>
 #include <linux/bitfield.h>
 #include <linux/dev_printk.h>
 #include <linux/err.h>
@@ -68,6 +69,12 @@ static const struct i2c_device_id inv_icm42607_id[] = {
 };
 MODULE_DEVICE_TABLE(i2c, inv_icm42607_id);
 
+static const struct acpi_device_id inv_icm42607_acpi_matches[] = {
+	{ "ICM42607", (kernel_ulong_t)&inv_icm42607_hw_data },
+	{ }
+};
+MODULE_DEVICE_TABLE(acpi, inv_icm42607_acpi_matches);
+
 static const struct of_device_id inv_icm42607_of_matches[] = {
 	{
 		.compatible = "invensense,icm42607",
@@ -83,6 +90,7 @@ MODULE_DEVICE_TABLE(of, inv_icm42607_of_matches);
 static struct i2c_driver inv_icm42607_driver = {
 	.driver = {
 		.name = "inv-icm42607-i2c",
+		.acpi_match_table = inv_icm42607_acpi_matches,
 		.of_match_table = inv_icm42607_of_matches,
 		.pm = pm_ptr(&inv_icm42607_pm_ops),
 	},
