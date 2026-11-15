@@ -116,6 +116,18 @@ if command -v ccache >/dev/null; then
     MAKE_ARGS+=("CC=ccache ${CROSS_COMPILE}gcc" "HOSTCC=ccache gcc" "HOSTCXX=ccache g++")
 fi
 
+cp "$ROOT/.config-arm" "$ROOT/.config"
+
+# Give a stock config a distinct module directory without modifying the input.
+if grep -qx 'CONFIG_LOCALVERSION=""' "$ROOT/.config"; then
+    "$ROOT/scripts/config" --file "$ROOT/.config" --set-str LOCALVERSION '-custom-arm'
+fi
+
+make -s "${MAKE_ARGS[@]}" olddefconfig
+for setting in CONFIG_ARM64 CONFIG_EFI CONFIG_EFI_STUB CONFIG_OF CONFIG_ARCH_QCOM CONFIG_MODULES; do
+    grep -qx "$setting=y" "$ROOT/.config" || die "$setting=y is required in the arm64 build config"
+done
+
 # Prepare the bootc overlay before building, so the device can reboot while
 # the local kernel build runs.
 ssh "$HOST" /bin/bash -s <<'REMOTE_OVERLAY'
@@ -129,16 +141,6 @@ fi
 REMOTE_OVERLAY
 
 mkdir -p "$ROOT/.sync-arm"
-
-# Give a stock config a distinct module directory without modifying the input.
-if grep -qx 'CONFIG_LOCALVERSION=""' "$ROOT/.config"; then
-    "$ROOT/scripts/config" --file "$ROOT/.config" --set-str LOCALVERSION '-custom-arm'
-fi
-
-make -s "${MAKE_ARGS[@]}" olddefconfig
-for setting in CONFIG_ARM64 CONFIG_EFI CONFIG_EFI_STUB CONFIG_OF CONFIG_ARCH_QCOM CONFIG_MODULES; do
-    grep -qx "$setting=y" "$ROOT/.config" || die "$setting=y is required in the arm64 build config"
-done
 
 echo "Building arm64 kernel, modules, and DTBs with $JOBS jobs"
 time make -s -j "$JOBS" "${MAKE_ARGS[@]}" all dtbs
