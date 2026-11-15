@@ -29,6 +29,7 @@
 #include <linux/usb/typec_retimer.h>
 #include <linux/workqueue.h>
 
+#include <drm/drm_atomic_helper.h>
 #include <drm/drm_bridge.h>
 
 #define S2MM006_IRQ_FIRST		0x02
@@ -708,6 +709,9 @@ static int samsung_emuec_bridge_attach(struct drm_bridge *bridge,
 }
 
 static const struct drm_bridge_funcs samsung_emuec_bridge_funcs = {
+	.atomic_create_state = drm_atomic_helper_bridge_create_state,
+	.atomic_duplicate_state = drm_atomic_helper_bridge_duplicate_state,
+	.atomic_destroy_state = drm_atomic_helper_bridge_destroy_state,
 	.attach = samsung_emuec_bridge_attach,
 	.hpd_enable = samsung_emuec_bridge_hpd_enable,
 };
