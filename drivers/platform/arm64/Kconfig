@@ -23,6 +23,7 @@ config EC_ACER_ASPIRE1
 	depends on DRM
 	depends on POWER_SUPPLY
 	depends on INPUT
+	select DRM_KMS_HELPER
 	help
 	  Say Y here to enable the EC driver for the (Snapdragon-based)
 	  Acer Aspire 1 laptop. The EC handles battery and charging

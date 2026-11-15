@@ -2,6 +2,7 @@
 /* Copyright (c) 2024, Nikita Travkin <nikita@trvn.ru> */
 
 #include <linux/unaligned.h>
+#include <drm/drm_atomic_helper.h>
 #include <drm/drm_bridge.h>
 #include <linux/bits.h>
 #include <linux/delay.h>
@@ -392,6 +393,9 @@ static void aspire_ec_bridge_hpd_enable(struct drm_bridge *bridge)
 }
 
 static const struct drm_bridge_funcs aspire_ec_bridge_funcs = {
+	.atomic_create_state = drm_atomic_helper_bridge_create_state,
+	.atomic_duplicate_state = drm_atomic_helper_bridge_duplicate_state,
+	.atomic_destroy_state = drm_atomic_helper_bridge_destroy_state,
 	.hpd_enable = aspire_ec_bridge_hpd_enable,
 	.attach = aspire_ec_bridge_attach,
 };
