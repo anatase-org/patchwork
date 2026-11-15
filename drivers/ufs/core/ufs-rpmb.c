@@ -28,6 +28,16 @@ static const struct bus_type ufs_rpmb_bus_type = {
 	.name = "ufs_rpmb",
 };
 
+int ufs_rpmb_init(void)
+{
+	return bus_register(&ufs_rpmb_bus_type);
+}
+
+void ufs_rpmb_exit(void)
+{
+	bus_unregister(&ufs_rpmb_bus_type);
+}
+
 /* UFS RPMB device structure */
 struct ufs_rpmb_dev {
 	u8 region_id;
@@ -132,7 +142,14 @@ static void ufs_rpmb_device_release(struct device *dev)
 {
 	struct ufs_rpmb_dev *ufs_rpmb = dev_get_drvdata(dev);
 
+	kfree(ufs_rpmb);
+}
+
+static void ufs_rpmb_unregister(struct ufs_rpmb_dev *ufs_rpmb)
+{
+	/* The RPMB child holds a reference to the region device. */
 	rpmb_dev_unregister(ufs_rpmb->rdev);
+	device_unregister(&ufs_rpmb->dev);
 }
 
 /* UFS RPMB device registration */
@@ -167,13 +184,14 @@ int ufs_rpmb_probe(struct ufs_hba *hba)
 		if (!cap)
 			continue;
 
-		ufs_rpmb = devm_kzalloc(hba->dev, sizeof(*ufs_rpmb), GFP_KERNEL);
+		ufs_rpmb = kzalloc_obj(*ufs_rpmb);
 		if (!ufs_rpmb) {
 			ret = -ENOMEM;
 			goto err_out;
 		}
 
 		ufs_rpmb->hba = hba;
+		ufs_rpmb->region_id = region;
 		ufs_rpmb->dev.parent = &hba->ufs_rpmb_wlun->sdev_gendev;
 		ufs_rpmb->dev.bus = &ufs_rpmb_bus_type;
 		ufs_rpmb->dev.release = ufs_rpmb_device_release;
@@ -214,7 +232,6 @@ int ufs_rpmb_probe(struct ufs_hba *hba)
 		cid = NULL;
 
 		ufs_rpmb->rdev = rdev;
-		ufs_rpmb->region_id = region;
 
 		list_add_tail(&ufs_rpmb->node, &hba->rpmbs);
 
@@ -226,7 +243,7 @@ err_out:
 	kfree(cid);
 	list_for_each_entry_safe(it, tmp, &hba->rpmbs, node) {
 		list_del(&it->node);
-		device_unregister(&it->dev);
+		ufs_rpmb_unregister(it);
 	}
 
 	return ret;
@@ -246,7 +263,7 @@ void ufs_rpmb_remove(struct ufs_hba *hba)
 		/* Remove from list first */
 		list_del(&ufs_rpmb->node);
 		/* Unregister device */
-		device_unregister(&ufs_rpmb->dev);
+		ufs_rpmb_unregister(ufs_rpmb);
 	}
 
 	dev_info(hba->dev, "All UFS RPMB devices unregistered\n");
