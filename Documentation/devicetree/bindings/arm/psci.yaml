@@ -70,6 +70,14 @@ properties:
       # HVC #0, with the register assignments specified in this binding.
       - hvc
 
+  arm,prefer-cpu-suspend:
+    type: boolean
+    description: |
+      The platform prefers CPU_SUSPEND with its system-level idle states for
+      normal system sleep, even when firmware also supports SYSTEM_SUSPEND.
+      CPU_SUSPEND may preserve wakeup sources unavailable with SYSTEM_SUSPEND.
+      An operating system should default to suspend-to-idle on such platforms.
+
   cpu_suspend:
     $ref: /schemas/types.yaml#/definitions/uint32
     description: Function ID for CPU_SUSPEND operation
