@@ -625,9 +625,6 @@ static int msm_dp_display_prepare_link(struct msm_dp_display_private *dp)
 
 	drm_dbg_dp(dp->drm_dev, "sink_count=%d\n", dp->link->sink_count);
 
-	if (msm_dp_display->is_edp)
-		msm_dp_hpd_plug_handle(dp);
-
 	rc = pm_runtime_resume_and_get(&msm_dp_display->pdev->dev);
 	if (rc) {
 		DRM_ERROR("failed to pm_runtime_resume\n");
@@ -1419,6 +1416,17 @@ void msm_dp_display_atomic_pre_enable(struct msm_dp *msm_dp_display,
 	if (!crtc)
 		return;
 	crtc_state = drm_atomic_get_new_crtc_state(state, crtc);
+
+	if (msm_dp_display->is_edp) {
+		struct drm_crtc_state *old_crtc_state;
+
+		old_crtc_state = drm_atomic_get_old_crtc_state(state, crtc);
+		if (old_crtc_state && old_crtc_state->self_refresh_active)
+			return;
+
+		/* The panel is prepared; read link limits before selecting bpp. */
+		msm_dp_hpd_plug_handle(dp);
+	}
 
 	/*
 	 * The DPU encoder's .atomic_enable() reads the mode's YUV420 / wide bus
