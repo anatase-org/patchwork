@@ -805,6 +805,18 @@ static const struct of_device_id psci_of_match[] __initconst = {
 	{},
 };
 
+static void __init psci_dt_init_suspend_default(const struct device_node *np)
+{
+#ifdef CONFIG_SUSPEND
+	if (mem_sleep_default == PM_SUSPEND_MAX &&
+	    of_property_read_bool(np, "arm,prefer-cpu-suspend")) {
+		/* A later mem_sleep_default= command-line option takes precedence. */
+		mem_sleep_default = PM_SUSPEND_TO_IDLE;
+		mem_sleep_current = PM_SUSPEND_TO_IDLE;
+	}
+#endif
+}
+
 int __init psci_dt_init(void)
 {
 	struct device_node *np;
@@ -821,6 +833,8 @@ int __init psci_dt_init(void)
 
 	init_fn = (psci_initcall_t)matched_np->data;
 	ret = init_fn(np);
+	if (!ret)
+		psci_dt_init_suspend_default(np);
 
 	of_node_put(np);
 	return ret;
