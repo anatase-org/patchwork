@@ -785,6 +785,28 @@
 	status = "okay";
 };
 
+&spss_glink {
+	status = "okay";
+
+	sec-nvm {
+		compatible = "qcom,hamoa-spss-nvm";
+		qcom,glink-channels = "sec_nvm_sp_nvm";
+		memory-region = <&spu_secure_shared_memory_mem>;
+	};
+
+	tpm-nvm {
+		compatible = "qcom,hamoa-spss-nvm";
+		qcom,glink-channels = "sec_nvm_stpm_lite_msft";
+		memory-region = <&spu_secure_shared_memory_mem>;
+	};
+
+	ksp-nvm {
+		compatible = "qcom,hamoa-spss-nvm";
+		qcom,glink-channels = "sec_nvm_ksp_msft";
+		memory-region = <&spu_secure_shared_memory_mem>;
+	};
+};
+
 &swr1 {
 	status = "okay";
 
