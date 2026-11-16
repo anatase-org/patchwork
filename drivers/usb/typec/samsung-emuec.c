@@ -13,10 +13,12 @@
 #include <linux/errno.h>
 #include <linux/i2c.h>
 #include <linux/interrupt.h>
+#include <linux/iopoll.h>
 #include <linux/math.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/of.h>
+#include <linux/pm.h>
 #include <linux/power_supply.h>
 #include <linux/slab.h>
 #include <linux/unaligned.h>
@@ -64,7 +66,6 @@
 #define S2MM006_DP_CONFIG_RECEIVED	BIT(6)
 #define S2MM006_DP_ATTENTION_RECEIVED	BIT(7)
 #define S2MM006_ENTER_USB_SUCCESS	(2 << 2)
-#define S2MM006_MAX_CHARGE_MW		65000
 #define S2MM006_MAX_CHARGE_MV		20000
 
 enum samsung_emuec_mode {
@@ -105,8 +106,8 @@ struct samsung_emuec {
 	bool dp_enter_requested;
 	bool dp_hpd;
 	u8 dp_pin;
-	bool pd_attempted;
-	u8 caps_retries;
+	u32 requested_rdo;
+	u32 requested_pdo;
 };
 
 static int samsung_emuec_read(struct samsung_emuec *pdic, u16 reg,
@@ -164,6 +165,8 @@ static int samsung_emuec_clear_irqs(struct samsung_emuec *pdic)
 		if (ret)
 			return ret;
 	}
+	dev_dbg(&pdic->client->dev, "interrupts: %*ph\n",
+		(int)sizeof(pending), pending);
 
 	/* The Windows driver acknowledges each interrupt byte by writing it back. */
 	for (reg = S2MM006_IRQ_FIRST; reg <= S2MM006_IRQ_LAST; reg++) {
@@ -269,9 +272,9 @@ static void samsung_emuec_detach(struct samsung_emuec *pdic)
 		schedule_work(&pdic->hpd_work);
 	}
 	pdic->dp_pin = 0;
-	pdic->pd_attempted = false;
+	pdic->requested_rdo = 0;
+	pdic->requested_pdo = 0;
 	pdic->usb_mode = USB_MODE_NONE;
-	pdic->caps_retries = 0;
 	pdic->attempted_mode = SAMSUNG_EMUEC_MODE_NONE;
 	pdic->voltage_uv = 0;
 	pdic->current_ua = 0;
@@ -308,6 +311,29 @@ static int samsung_emuec_read_source_caps(struct samsung_emuec *pdic,
 	return 0;
 }
 
+static unsigned int samsung_emuec_limit_current(u32 pdo)
+{
+	u32 voltage = pdo_fixed_voltage(pdo);
+	u32 power;
+
+	/* Galaxy Book input limits from Windows Policy_limit_MaxCurrent. */
+	if (!voltage || voltage > S2MM006_MAX_CHARGE_MV)
+		return 0;
+	if (voltage <= 5000)
+		power = 15000;
+	else if (voltage <= 9000)
+		power = 25000;
+	else if (voltage <= 12000)
+		power = 36000;
+	else if (voltage <= 15000)
+		power = 45000;
+	else
+		power = 65000;
+
+	return rounddown(min3(pdo_max_current(pdo), 5000U,
+			      power * 1000 / voltage), 10);
+}
+
 static int samsung_emuec_choose_pdo(const u32 *pdos, int count,
 				    unsigned int *mv, unsigned int *ma)
 {
@@ -322,9 +348,7 @@ static int samsung_emuec_choose_pdo(const u32 *pdos, int count,
 		voltage = pdo_fixed_voltage(pdos[i]);
 		if (!voltage || voltage > S2MM006_MAX_CHARGE_MV)
 			continue;
-		current_ma = min(pdo_max_current(pdos[i]),
-				  S2MM006_MAX_CHARGE_MW * 1000U / voltage);
-		current_ma = rounddown(current_ma, 10);
+		current_ma = samsung_emuec_limit_current(pdos[i]);
 		power = voltage * current_ma / 1000;
 		if (power > best_power) {
 			best_power = power;
@@ -354,15 +378,17 @@ static int samsung_emuec_active_rdo(struct samsung_emuec *pdic, u32 *rdo)
 static int samsung_emuec_request_pdo(struct samsung_emuec *pdic, u32 rdo)
 {
 	u8 request[8], status;
-	u32 active;
-	int ret, i;
+	int ret, err;
 
-	ret = samsung_emuec_read(pdic, S2MM006_REG_TX_STATUS,
-				&status, sizeof(status));
+	/* Windows waits up to ten 30 ms intervals for the transmit mailbox. */
+	ret = read_poll_timeout(samsung_emuec_read, err,
+				err || !(status & S2MM006_TX_REQUEST),
+				30000, 300000, false, pdic,
+				S2MM006_REG_TX_STATUS, &status, sizeof(status));
 	if (ret)
 		return ret;
-	if (status & S2MM006_TX_REQUEST)
-		return -EBUSY;
+	if (err)
+		return err;
 
 	/* The EC mailbox expects a PD Request header and a reserved halfword. */
 	put_unaligned_le16(0x1002, request);
@@ -374,22 +400,9 @@ static int samsung_emuec_request_pdo(struct samsung_emuec *pdic, u32 rdo)
 		return ret;
 
 	status |= S2MM006_TX_REQUEST;
-	ret = samsung_emuec_write(pdic, S2MM006_REG_TX_STATUS,
-				  &status, sizeof(status));
-	if (ret)
-		return ret;
-
-	for (i = 0; i < 20; i++) {
-		msleep(100);
-		ret = samsung_emuec_active_rdo(pdic, &active);
-		if (ret)
-			return ret;
-		if (rdo_index(active) == rdo_index(rdo) &&
-		    rdo_op_current(active) == rdo_op_current(rdo))
-			return 0;
-	}
-
-	return -ETIMEDOUT;
+	/* Contract completion is reported by the controller's interrupts. */
+	return samsung_emuec_write(pdic, S2MM006_REG_TX_STATUS,
+				    &status, sizeof(status));
 }
 
 static void samsung_emuec_update_pd(struct samsung_emuec *pdic)
@@ -398,16 +411,13 @@ static void samsung_emuec_update_pd(struct samsung_emuec *pdic)
 	struct usb_power_delivery_desc desc;
 	u32 pdos[PDO_MAX_OBJECTS] = {}, active, requested;
 	unsigned int mv = 0, ma = 0;
+	u8 status;
 	u16 revision;
 	int count, selected, actual, ret;
 
 	ret = samsung_emuec_read_source_caps(pdic, pdos, &count, &revision);
-	if (ret) {
-		if (ret == -ENODATA && pdic->caps_retries++ < 5)
-			mod_delayed_work(system_dfl_wq, &pdic->work,
-					 msecs_to_jiffies(200));
+	if (ret)
 		return;
-	}
 
 	if (!pdic->partner_pd) {
 		desc.revision = revision;
@@ -440,28 +450,43 @@ static void samsung_emuec_update_pd(struct samsung_emuec *pdic)
 	ret = samsung_emuec_active_rdo(pdic, &active);
 	if (ret)
 		return;
+	ret = samsung_emuec_read(pdic, S2MM006_REG_TX_STATUS,
+				&status, sizeof(status));
+	if (ret)
+		return;
 
 	requested = RDO_FIXED(selected, ma, ma, RDO_USB_COMM | RDO_NO_SUSPEND);
 	actual = rdo_index(active);
-	/* Firmware may already hold a stronger contract. Do not renegotiate it. */
-	if (actual < 1 || actual > count ||
-		pdo_type(pdos[actual - 1]) != PDO_TYPE_FIXED ||
-		rdo_op_current(active) > pdo_max_current(pdos[actual - 1]) ||
-		pdo_fixed_voltage(pdos[actual - 1]) *
-		rdo_op_current(active) < mv * ma) {
-		if (!pdic->pd_attempted) {
-			pdic->pd_attempted = true;
-			ret = samsung_emuec_request_pdo(pdic, requested);
-			if (ret)
-				dev_warn(&pdic->client->dev,
-						"PD contract request failed: %d\n", ret);
-			ret = samsung_emuec_active_rdo(pdic, &active);
-			if (ret)
-				return;
-		}
+	/* Do not mistake the outgoing RDO for a completed power transition. */
+	if (!(status & S2MM006_TX_REQUEST) &&
+	    actual >= 1 && actual <= count &&
+	    pdo_type(pdos[actual - 1]) == PDO_TYPE_FIXED &&
+	    rdo_op_current(active) <= samsung_emuec_limit_current(pdos[actual - 1]) &&
+	    pdo_fixed_voltage(pdos[actual - 1]) * rdo_op_current(active) >= mv * ma) {
+		/* A later contract loss must be allowed to request this PDO again. */
+		pdic->requested_rdo = 0;
+		pdic->requested_pdo = 0;
+		goto report;
 	}
 
-	actual = rdo_index(active);
+	/* Suppress duplicates, but re-evaluate changed source limits. */
+	if (pdic->requested_rdo != requested ||
+	    pdic->requested_pdo != pdos[selected - 1]) {
+		ret = samsung_emuec_request_pdo(pdic, requested);
+		if (ret)
+			dev_warn(&pdic->client->dev,
+				 "failed to submit PD request %#x: %d\n", requested, ret);
+		else {
+			pdic->requested_rdo = requested;
+			pdic->requested_pdo = pdos[selected - 1];
+		}
+	}
+	dev_dbg(&pdic->client->dev, "PD requested %#x, active %#x, TX %#x\n",
+		 requested, active, status);
+
+report:
+	if (status & S2MM006_TX_REQUEST)
+		return;
 	if (actual < 1 || actual > count ||
 	    pdo_type(pdos[actual - 1]) != PDO_TYPE_FIXED)
 		return;
@@ -1097,6 +1122,36 @@ static void samsung_emuec_remove(struct i2c_client *client)
 	of_node_put(pdic->connector);
 }
 
+static int samsung_emuec_suspend(struct device *dev)
+{
+	struct samsung_emuec *pdic = dev_get_drvdata(dev);
+
+	/* Leave controller events latched until its I2C bus has resumed. */
+	disable_irq(pdic->client->irq);
+	cancel_delayed_work_sync(&pdic->work);
+	flush_work(&pdic->hpd_work);
+
+	return 0;
+}
+
+static int samsung_emuec_resume(struct device *dev)
+{
+	struct samsung_emuec *pdic = dev_get_drvdata(dev);
+
+	scoped_guard(mutex, &pdic->lock) {
+		pdic->requested_rdo = 0;
+		pdic->requested_pdo = 0;
+		pdic->attempted_mode = SAMSUNG_EMUEC_MODE_NONE;
+	}
+	enable_irq(pdic->client->irq);
+	mod_delayed_work(system_dfl_wq, &pdic->work, 0);
+
+	return 0;
+}
+
+static DEFINE_SIMPLE_DEV_PM_OPS(samsung_emuec_pm_ops, samsung_emuec_suspend,
+			      samsung_emuec_resume);
+
 static const struct of_device_id samsung_emuec_of_match[] = {
 	{ .compatible = "samsung,s2mm006" },
 	{ }
@@ -1107,6 +1162,7 @@ static struct i2c_driver samsung_emuec_driver = {
 	.driver = {
 		.name = "samsung-emuec",
 		.of_match_table = samsung_emuec_of_match,
+		.pm = pm_sleep_ptr(&samsung_emuec_pm_ops),
 	},
 	.probe = samsung_emuec_probe,
 	.remove = samsung_emuec_remove,
