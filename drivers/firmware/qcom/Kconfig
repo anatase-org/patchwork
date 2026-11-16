@@ -94,4 +94,14 @@ config QCOM_QSEECOM_UEFISECAPP
 	  Select Y here to provide access to EFI variables on the aforementioned
 	  platforms.
 
+config QCOM_SPSS_NVM
+	tristate "Qualcomm SPSS secure NVM backing service"
+	depends on QCOM_SCM && RPMSG && OF && HAS_IOMEM
+	select AUXILIARY_BUS
+	select CRYPTO_LIB_SHA256
+	select CRC32
+	help
+	  Provide persistent storage for firmware-started SPSS applications,
+	  including the TPM, using the existing secure NVM partition in SPI NOR.
+
 endmenu
