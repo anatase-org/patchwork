@@ -3139,6 +3139,23 @@
 			#interconnect-cells = <2>;
 		};
 
+		spss_glink: spss-glink@1885008 {
+			compatible = "qcom,hamoa-spss-glink";
+			reg = <0 0x01885008 0 0x8>,
+			      <0 0x01885010 0 0x4>;
+			reg-names = "handoff-address", "handoff-size";
+
+			interrupts-extended = <&ipcc IPCC_CLIENT_SPSS
+						 IPCC_MPROC_SIGNAL_GLINK_QMP
+						 IRQ_TYPE_EDGE_RISING>;
+			mboxes = <&ipcc IPCC_CLIENT_SPSS
+				    IPCC_MPROC_SIGNAL_GLINK_QMP>;
+
+			qcom,remote-pid = <8>;
+			label = "spss";
+			status = "disabled";
+		};
+
 		pcie3: pcie@1bd0000 {
 			device_type = "pci";
 			compatible = "qcom,pcie-x1e80100";
