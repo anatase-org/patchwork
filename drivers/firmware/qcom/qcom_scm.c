@@ -1356,7 +1356,7 @@ int qcom_scm_assign_mem(phys_addr_t mem_addr, size_t mem_sz,
 	size_t dest_sz;
 	size_t src_sz;
 	size_t ptr_sz;
-	int next_vm;
+	u64 next_vm;
 	__le32 *src;
 	int ret, i, b;
 	u64 srcvm_bits = *srcvm;
@@ -1378,7 +1378,7 @@ int qcom_scm_assign_mem(phys_addr_t mem_addr, size_t mem_sz,
 	src = ptr;
 	i = 0;
 	for (b = 0; b < BITS_PER_TYPE(u64); b++) {
-		if (srcvm_bits & BIT(b))
+		if (srcvm_bits & BIT_ULL(b))
 			src[i++] = cpu_to_le32(b);
 	}
 
@@ -1397,7 +1397,7 @@ int qcom_scm_assign_mem(phys_addr_t mem_addr, size_t mem_sz,
 		destvm->perm = cpu_to_le32(newvm->perm);
 		destvm->ctx = 0;
 		destvm->ctx_size = 0;
-		next_vm |= BIT(newvm->vmid);
+		next_vm |= BIT_ULL(newvm->vmid);
 	}
 
 	ret = __qcom_scm_assign_mem(__scm->dev, mem_to_map_phys, mem_to_map_sz,
