@@ -422,7 +422,7 @@
 	clock-frequency = <400000>;
 	status = "okay";
 
-	pdic@33 {
+	pdic0: pdic@33 {
 		compatible = "samsung,s2mm006";
 		reg = <0x33>;
 		interrupts-extended = <&tlmm 38 IRQ_TYPE_LEVEL_LOW>;
@@ -469,7 +469,7 @@
 	clock-frequency = <400000>;
 	status = "okay";
 
-	pdic@33 {
+	pdic1: pdic@33 {
 		compatible = "samsung,s2mm006";
 		reg = <0x33>;
 		interrupts-extended = <&tlmm 93 IRQ_TYPE_LEVEL_LOW>;

@@ -661,6 +661,7 @@
 	embedded-controller@64 {
 		compatible = "samsung,galaxybook4-edge-ec";
 		reg = <0x64>;
+		power-supplies = <&pdic0>, <&pdic1>;
 		samsung,event-interface = <&ec_events>;
 		interrupts-extended = <&tlmm 66 IRQ_TYPE_EDGE_FALLING>;
 	};

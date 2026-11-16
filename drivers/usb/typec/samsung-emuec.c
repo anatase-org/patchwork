@@ -1036,7 +1036,7 @@ static int samsung_emuec_probe(struct i2c_client *client)
 	pdic->psy_desc.num_properties = ARRAY_SIZE(samsung_emuec_properties);
 	pdic->psy_desc.get_property = samsung_emuec_get_property;
 	psy_config.drv_data = pdic;
-	psy_config.fwnode = of_fwnode_handle(pdic->connector);
+	psy_config.fwnode = dev_fwnode(dev);
 
 	pdic->psy = devm_power_supply_register(dev, &pdic->psy_desc, &psy_config);
 	if (IS_ERR(pdic->psy)) {

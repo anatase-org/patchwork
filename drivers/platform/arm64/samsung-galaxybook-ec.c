@@ -15,6 +15,7 @@
 #include <linux/i2c.h>
 #include <linux/interrupt.h>
 #include <linux/leds.h>
+#include <linux/math.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/of.h>
@@ -30,6 +31,11 @@
 #define GALAXYBOOK_EC_CAPACITY		0xb0
 #define GALAXYBOOK_EC_DESIGN_VOLTAGE	0xb4
 #define GALAXYBOOK_EC_CYCLES		0xd0
+
+#define GALAXYBOOK_EC_SET_INPUT_CURRENT	0x90
+#define GALAXYBOOK_EC_SET_ADAPTER_INFO	0x91
+#define GALAXYBOOK_EC_MAX_INPUT_MW	65000
+#define GALAXYBOOK_EC_MAX_INPUT_MV	20000
 
 #define GALAXYBOOK_EC_BAT_PRESENT	BIT(0)
 #define GALAXYBOOK_EC_AC_PRESENT	BIT(2)
@@ -104,26 +110,27 @@ static int galaxybook_ec_wait_ready(struct i2c_client *client)
 	return -ETIMEDOUT;
 }
 
-static int galaxybook_kbd_backlight_set(struct led_classdev *led,
-				      enum led_brightness brightness)
+/* Caller holds ec->lock across staging the payload and executing the command. */
+static int galaxybook_ec_write_command(struct samsung_galaxybook_ec *ec,
+				      u8 command, const u8 *data, size_t len)
 {
-	struct samsung_galaxybook_ec *ec =
-		container_of(led, struct samsung_galaxybook_ec, kbd_backlight);
-	u8 select[] = { 0x40, 0x00, 0xf4, 0x80, brightness };
-	u8 execute[] = { 0x40, 0x00, 0xff, 0x10, 0xfd };
+	u8 request[] = { 0x40, 0x00, 0xf4, 0x80, 0 };
+	u8 execute[] = { 0x40, 0x00, 0xff, 0x10, command };
+	size_t i;
 	int ret;
-
-	guard(mutex)(&ec->lock);
 
 	ret = galaxybook_ec_wait_ready(ec->client);
 	if (ret)
 		return ret;
 
-	ret = i2c_master_send(ec->client, select, sizeof(select));
-	if (ret != sizeof(select))
-		return ret < 0 ? ret : -EIO;
-
-	usleep_range(5000, 6000);
+	for (i = 0; i < len; i++) {
+		request[3] = 0x80 + i;
+		request[4] = data[i];
+		ret = i2c_master_send(ec->client, request, sizeof(request));
+		if (ret != sizeof(request))
+			return ret < 0 ? ret : -EIO;
+		usleep_range(5000, 6000);
+	}
 
 	ret = i2c_master_send(ec->client, execute, sizeof(execute));
 	if (ret != sizeof(execute))
@@ -132,39 +139,86 @@ static int galaxybook_kbd_backlight_set(struct led_classdev *led,
 	return galaxybook_ec_wait_ready(ec->client);
 }
 
+static int galaxybook_charger_contract(struct power_supply *psy,
+				      unsigned int *mv, unsigned int *ma)
+{
+	union power_supply_propval online, voltage, current_max;
+	struct power_supply *supplier;
+	unsigned int active = 0;
+	int i, ret;
+
+	if (!psy->num_supplies)
+		return -ENODEV;
+
+	*mv = 0;
+	*ma = 0;
+	for (i = 0; i < psy->num_supplies; i++) {
+		supplier = power_supply_get_by_name(psy->supplied_from[i]);
+		if (!supplier)
+			return -ENODEV;
+
+		ret = power_supply_get_property(supplier, POWER_SUPPLY_PROP_ONLINE,
+						&online);
+		if (!ret && online.intval) {
+			ret = power_supply_get_property(supplier,
+					POWER_SUPPLY_PROP_VOLTAGE_NOW, &voltage);
+			if (!ret)
+				ret = power_supply_get_property(supplier,
+					POWER_SUPPLY_PROP_CURRENT_MAX, &current_max);
+			if (!ret) {
+				/* Attachment can precede availability of the PD contract. */
+				if (voltage.intval <= 0 || current_max.intval <= 0)
+					ret = -EAGAIN;
+				else if (voltage.intval < 5000000 ||
+					 voltage.intval > GALAXYBOOK_EC_MAX_INPUT_MV * 1000 ||
+					 current_max.intval > 5000000)
+					ret = -ERANGE;
+				else {
+					*mv = voltage.intval / 1000;
+					*ma = current_max.intval / 1000;
+					active++;
+				}
+			}
+		}
+		power_supply_put(supplier);
+		if (ret)
+			return ret;
+	}
+
+	if (active > 1)
+		return -EBUSY;
+	if (active) {
+		*ma = min(*ma, GALAXYBOOK_EC_MAX_INPUT_MW * 1000U / *mv);
+		/* Match EmuEC's five percent input-current margin. */
+		*ma = *ma * 95 / 100;
+	}
+
+	return 0;
+}
+
+static int galaxybook_kbd_backlight_set(struct led_classdev *led,
+				      enum led_brightness brightness)
+{
+	struct samsung_galaxybook_ec *ec =
+		container_of(led, struct samsung_galaxybook_ec, kbd_backlight);
+	u8 level = brightness;
+
+	guard(mutex)(&ec->lock);
+
+	return galaxybook_ec_write_command(ec, 0xfd, &level, sizeof(level));
+}
+
 static int galaxybook_kbd_backlight_read(struct samsung_galaxybook_ec *ec,
 				       enum led_brightness *brightness)
 {
-	u8 select[] = { 0x40, 0x00, 0xf4, 0x80, 0x00 };
-	u8 execute[] = { 0x40, 0x00, 0xff, 0x10, 0xfc };
+	u8 data[2] = {};
 	u8 level;
 	int ret;
 
 	guard(mutex)(&ec->lock);
 
-	ret = galaxybook_ec_wait_ready(ec->client);
-	if (ret)
-		return ret;
-
 	/* Stage two zero bytes before executing the read command. */
-	ret = i2c_master_send(ec->client, select, sizeof(select));
-	if (ret != sizeof(select))
-		return ret < 0 ? ret : -EIO;
-
-	usleep_range(5000, 6000);
-
-	select[3] = 0x81;
-	ret = i2c_master_send(ec->client, select, sizeof(select));
-	if (ret != sizeof(select))
-		return ret < 0 ? ret : -EIO;
-
-	usleep_range(5000, 6000);
-
-	ret = i2c_master_send(ec->client, execute, sizeof(execute));
-	if (ret != sizeof(execute))
-		return ret < 0 ? ret : -EIO;
-
-	ret = galaxybook_ec_wait_ready(ec->client);
+	ret = galaxybook_ec_write_command(ec, 0xfc, data, sizeof(data));
 	if (ret)
 		return ret;
 
@@ -433,6 +487,41 @@ static enum power_supply_property galaxybook_ac_properties[] = {
 	POWER_SUPPLY_PROP_MODEL_NAME,
 };
 
+static void galaxybook_external_power_changed(struct power_supply *psy)
+{
+	struct samsung_galaxybook_ec *ec = power_supply_get_drvdata(psy);
+	unsigned int mv, ma;
+	u8 input[2], adapter[2];
+	int ret;
+
+	guard(mutex)(&ec->lock);
+
+	ret = galaxybook_charger_contract(psy, &mv, &ma);
+	if (ret == -EBUSY) {
+		/* Power-path arbitration must precede using either contract. */
+		dev_warn_ratelimited(&ec->client->dev,
+				     "multiple charging paths active, clearing EC input budget\n");
+		mv = 0;
+		ma = 0;
+	} else if (ret) {
+		return;
+	}
+
+	/* EmuEC sends the input limit in mA, then watts and 100 mV units. */
+	input[0] = ma & 0xff;
+	input[1] = ma >> 8;
+	adapter[0] = mv * ma / 1000000;
+	adapter[1] = mv / 100;
+	ret = galaxybook_ec_write_command(ec, GALAXYBOOK_EC_SET_INPUT_CURRENT,
+					 input, sizeof(input));
+	if (!ret)
+		ret = galaxybook_ec_write_command(ec, GALAXYBOOK_EC_SET_ADAPTER_INFO,
+						 adapter, sizeof(adapter));
+	if (ret)
+		dev_warn_ratelimited(&ec->client->dev,
+				     "failed to update EC input budget: %d\n", ret);
+}
+
 static const struct power_supply_desc galaxybook_battery_desc = {
 	.name = "samsung-galaxybook-battery",
 	.type = POWER_SUPPLY_TYPE_BATTERY,
@@ -447,27 +536,26 @@ static const struct power_supply_desc galaxybook_ac_desc = {
 	.properties = galaxybook_ac_properties,
 	.num_properties = ARRAY_SIZE(galaxybook_ac_properties),
 	.get_property = galaxybook_ac_get_property,
+	.external_power_changed = galaxybook_external_power_changed,
 };
 
 static int galaxybook_profile_set(struct device *dev,
 				 enum platform_profile_option profile)
 {
 	struct samsung_galaxybook_ec *ec = dev_get_drvdata(dev);
-	u8 select[] = { 0x40, 0x00, 0xf4, 0x80, 0x80 };
-	u8 execute[] = { 0x40, 0x00, 0xff, 0x10, 0xee };
-	u8 mode;
+	u8 data[] = { 0x80, 0 };
 	int ret;
 
 	/* The Galaxy Book4 Edge ACPI PRF3 method maps Optimized to EC auto mode (0). */
 	switch (profile) {
 	case PLATFORM_PROFILE_QUIET:
-		mode = 0x0a;
+		data[1] = 0x0a;
 		break;
 	case PLATFORM_PROFILE_BALANCED:
-		mode = 0x00;
+		data[1] = 0x00;
 		break;
 	case PLATFORM_PROFILE_PERFORMANCE:
-		mode = 0x15;
+		data[1] = 0x15;
 		break;
 	default:
 		return -EINVAL;
@@ -475,28 +563,8 @@ static int galaxybook_profile_set(struct device *dev,
 
 	guard(mutex)(&ec->lock);
 
-	ret = galaxybook_ec_wait_ready(ec->client);
-	if (ret)
-		return ret;
-
 	/* PRF3 issues extended command 0xee with payload [0x80, mode]. */
-	ret = i2c_master_send(ec->client, select, sizeof(select));
-	if (ret != sizeof(select))
-		return ret < 0 ? ret : -EIO;
-	usleep_range(5000, 6000);
-
-	select[3] = 0x81;
-	select[4] = mode;
-	ret = i2c_master_send(ec->client, select, sizeof(select));
-	if (ret != sizeof(select))
-		return ret < 0 ? ret : -EIO;
-	usleep_range(5000, 6000);
-
-	ret = i2c_master_send(ec->client, execute, sizeof(execute));
-	if (ret != sizeof(execute))
-		return ret < 0 ? ret : -EIO;
-
-	ret = galaxybook_ec_wait_ready(ec->client);
+	ret = galaxybook_ec_write_command(ec, 0xee, data, sizeof(data));
 	if (!ret)
 		ec->profile = profile;
 	return ret;
@@ -705,10 +773,25 @@ static int samsung_galaxybook_ec_probe(struct i2c_client *client)
 	} else {
 		dev_warn(&client->dev, "platform profiles unavailable: %d\n", ret);
 	}
-	return devm_request_threaded_irq(&client->dev, client->irq, NULL,
+	ret = devm_request_threaded_irq(&client->dev, client->irq, NULL,
 					 galaxybook_ec_irq_thread, IRQF_ONESHOT,
 					 dev_name(&client->dev), ec);
+	if (ret)
+		return ret;
+
+	galaxybook_external_power_changed(ec->ac);
+	return 0;
 }
+
+static int galaxybook_ec_resume(struct device *dev)
+{
+	struct samsung_galaxybook_ec *ec = dev_get_drvdata(dev);
+
+	galaxybook_external_power_changed(ec->ac);
+	return 0;
+}
+
+static DEFINE_SIMPLE_DEV_PM_OPS(galaxybook_ec_pm_ops, NULL, galaxybook_ec_resume);
 
 static const struct of_device_id samsung_galaxybook_ec_of_match[] = {
 	{ .compatible = "samsung,galaxybook4-edge-ec" },
@@ -720,6 +803,7 @@ static struct i2c_driver samsung_galaxybook_ec_driver = {
 	.driver = {
 		.name = "samsung-galaxybook-ec",
 		.of_match_table = samsung_galaxybook_ec_of_match,
+		.pm = pm_sleep_ptr(&galaxybook_ec_pm_ops),
 	},
 	.probe = samsung_galaxybook_ec_probe,
 };

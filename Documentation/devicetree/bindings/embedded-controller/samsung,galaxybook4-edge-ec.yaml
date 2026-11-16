@@ -25,6 +25,16 @@ properties:
   reg:
     maxItems: 1
 
+  power-supplies:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    minItems: 1
+    maxItems: 2
+    items:
+      maxItems: 1
+    description:
+      USB-C controller power supplies reporting the negotiated input contracts
+      used to configure the EC charger input budget.
+
   samsung,event-interface:
     $ref: /schemas/types.yaml#/definitions/phandle
     description:
@@ -56,6 +66,7 @@ allOf:
           const: disabled
         interrupts: false
         samsung,event-interface: false
+        power-supplies: false
 
 additionalProperties: false
 
