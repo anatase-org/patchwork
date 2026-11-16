@@ -22651,6 +22651,16 @@ F:	Documentation/networking/device_drivers/cellular/qualcomm/rmnet.rst
 F:	drivers/net/ethernet/qualcomm/rmnet/
 F:	include/linux/if_rmnet.h
 
+QUALCOMM SPSS TPM AND SECURE STORAGE DRIVERS
+M:	Antheas Kapenekakis <lkml@antheas.dev>
+L:	linux-integrity@vger.kernel.org
+L:	linux-arm-msm@vger.kernel.org
+S:	Maintained
+F:	drivers/char/tpm/tpm_qcom_spss.c
+F:	drivers/firmware/qcom/qcom_spss_nvm.c
+F:	drivers/rpmsg/qcom_glink_spss.c
+F:	include/linux/firmware/qcom/spss.h
+
 QUALCOMM TEE (QCOMTEE) DRIVER
 M:	Amirreza Zarrabi <amirreza.zarrabi@oss.qualcomm.com>
 L:	linux-arm-msm@vger.kernel.org

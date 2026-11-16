@@ -243,6 +243,15 @@ config TCG_FTPM_TEE
 	help
 	  This driver proxies for firmware TPM running in TEE.
 
+config TCG_QCOM_SPSS
+	tristate "Qualcomm SPSS TPM"
+	depends on QCOM_QSEECOM && RPMSG_QCOM_GLINK_SPSS && HAS_DMA
+	select QCOM_SPSS_NVM
+	help
+	  Access the firmware-started stpm_lite_msft TPM application in the
+	  Qualcomm Secure Processor Subsystem, with persistent secure storage.
+	  The module will be called tpm_qcom_spss.
+
 config TCG_SVSM
 	tristate "SNP SVSM vTPM interface"
 	depends on AMD_MEM_ENCRYPT
