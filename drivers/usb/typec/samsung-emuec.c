@@ -13,6 +13,7 @@
 #include <linux/errno.h>
 #include <linux/i2c.h>
 #include <linux/interrupt.h>
+#include <linux/math.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/of.h>
@@ -323,7 +324,7 @@ static int samsung_emuec_choose_pdo(const u32 *pdos, int count,
 			continue;
 		current_ma = min(pdo_max_current(pdos[i]),
 				  S2MM006_MAX_CHARGE_MW * 1000U / voltage);
-		current_ma = round_down(current_ma, 10);
+		current_ma = rounddown(current_ma, 10);
 		power = voltage * current_ma / 1000;
 		if (power > best_power) {
 			best_power = power;
