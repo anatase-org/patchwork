@@ -195,4 +195,8 @@ int qcom_scm_qtee_invoke_smc(phys_addr_t inbuf, size_t inbuf_size,
 int qcom_scm_qtee_callback_response(phys_addr_t buf, size_t buf_size,
 				    u64 *result, u64 *response_type);
 
+int qcom_scm_storage_get_geometry(u64 *blocks, u32 *block_size);
+int qcom_scm_storage_read(u64 lba, void *data, size_t size);
+int qcom_scm_storage_write(u64 lba, const void *data, size_t size);
+
 #endif

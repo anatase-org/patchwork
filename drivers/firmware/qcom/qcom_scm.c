@@ -31,6 +31,7 @@
 #include <linux/remoteproc.h>
 #include <linux/sizes.h>
 #include <linux/types.h>
+#include <linux/unaligned.h>
 
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 
@@ -2568,6 +2569,121 @@ static void qcom_scm_qtee_init(struct qcom_scm *scm)
 
 	devm_add_action_or_reset(scm->dev, qcom_scm_qtee_free, qtee_dev);
 }
+
+struct qcom_scm_storage_request {
+	__le64 type;
+	__le64 slot;
+	__le64 lun;
+	__le64 partition;
+	__le64 command;
+};
+
+struct qcom_scm_storage_details {
+	__le64 lba;
+	__le64 length;
+	__le64 address;
+	__le64 size;
+};
+
+static int qcom_scm_storage_access(u64 command, u64 lba, void *data, size_t size)
+{
+	struct qcom_scm_storage_request *request;
+	struct qcom_scm_storage_details *details;
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SCM_SVC_STORAGE,
+		.cmd = QCOM_SCM_STORAGE_ACCESS,
+		.owner = ARM_SMCCC_OWNER_SIP,
+		.arginfo = QCOM_SCM_ARGS(4, QCOM_SCM_RO, QCOM_SCM_VAL,
+					 QCOM_SCM_RW, QCOM_SCM_VAL),
+	};
+	void *buffer __free(qcom_tzmem) = NULL;
+	struct qcom_scm_res res = {};
+	void *payload;
+	int ret;
+
+	if (!size || size > SZ_4K)
+		return -EINVAL;
+
+	buffer = qcom_tzmem_alloc(__scm->mempool, SZ_4K + size, GFP_KERNEL);
+	if (!buffer)
+		return -ENOMEM;
+
+	memset(buffer, 0, SZ_4K + size);
+	request = buffer;
+	details = buffer + sizeof(*request);
+	payload = buffer + SZ_4K;
+	request->type = cpu_to_le64(1); /* SPI NOR */
+	request->command = cpu_to_le64(command);
+	details->lba = cpu_to_le64(lba);
+	details->length = cpu_to_le64(size);
+	details->address = cpu_to_le64(qcom_tzmem_to_phys(payload));
+	if (command == 2)
+		memcpy(payload, data, size);
+
+	desc.args[0] = qcom_tzmem_to_phys(request);
+	desc.args[1] = sizeof(*request);
+	desc.args[2] = qcom_tzmem_to_phys(details);
+	desc.args[3] = sizeof(*details);
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+	if (ret)
+		return ret;
+
+	switch (res.result[0]) {
+	case 0:
+		if (command != 2)
+			memcpy(data, payload, size);
+		return 0;
+	case 1:
+		return -ENOMEM;
+	case 2:
+		return -EINVAL;
+	case 4:
+		return -EACCES;
+	case 5:
+		return -EOPNOTSUPP;
+	case 6:
+		return -EBADMSG;
+	case 7:
+		return -EBUSY;
+	case 8:
+		return -ENOENT;
+	case 9:
+		return -EROFS;
+	default:
+		return -EIO;
+	}
+}
+
+int qcom_scm_storage_get_geometry(u64 *blocks, u32 *block_size)
+{
+	u8 info[105];
+	int ret;
+
+	if (!__qcom_scm_is_call_available(__scm->dev, QCOM_SCM_SVC_STORAGE,
+					QCOM_SCM_STORAGE_ACCESS))
+		return -EOPNOTSUPP;
+
+	ret = qcom_scm_storage_access(4, 0, info, sizeof(info));
+	if (ret)
+		return ret;
+
+	*blocks = get_unaligned_le64(info);
+	*block_size = get_unaligned_le32(info + 8);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(qcom_scm_storage_get_geometry);
+
+int qcom_scm_storage_read(u64 lba, void *data, size_t size)
+{
+	return qcom_scm_storage_access(1, lba, data, size);
+}
+EXPORT_SYMBOL_GPL(qcom_scm_storage_read);
+
+int qcom_scm_storage_write(u64 lba, const void *data, size_t size)
+{
+	return qcom_scm_storage_access(2, lba, (void *)data, size);
+}
+EXPORT_SYMBOL_GPL(qcom_scm_storage_write);
 
 /**
  * qcom_scm_is_available() - Checks if SCM is available
