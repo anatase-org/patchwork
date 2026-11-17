@@ -488,8 +488,10 @@ static void spss_tpm_remove(struct auxiliary_device *adev)
 	struct spss_tpm *spss = auxiliary_get_drvdata(adev);
 
 	cancel_work_sync(&spss->init_work);
-	if (spss->registered)
+	if (spss->registered) {
 		tpm_chip_unregister(spss->chip);
+		spss->registered = false;
+	}
 
 	guard(mutex)(&spss->lock);
 	if (spss->endpoint) {
@@ -547,6 +549,7 @@ static struct auxiliary_driver spss_tpm_driver = {
 	.id_table = spss_tpm_id_table,
 	.probe = spss_tpm_probe,
 	.remove = spss_tpm_remove,
+	.shutdown = spss_tpm_remove,
 };
 module_auxiliary_driver(spss_tpm_driver);
 
