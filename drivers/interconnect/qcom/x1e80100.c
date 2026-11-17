@@ -1433,12 +1433,15 @@ static struct qcom_icc_bcm bcm_sh1 = {
 static struct qcom_icc_bcm bcm_sn0 = {
 	.name = "SN0",
 	.keepalive = true,
+	.keepalive_peak_only = true,
 	.num_nodes = 1,
 	.nodes = { &qns_gemnoc_sf },
 };
 
 static struct qcom_icc_bcm bcm_sn2 = {
 	.name = "SN2",
+	.keepalive = true,
+	.keepalive_peak_only = true,
 	.num_nodes = 1,
 	.nodes = { &qnm_aggre1_noc },
 };
