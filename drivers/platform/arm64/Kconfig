@@ -110,12 +110,14 @@ config EC_SAMSUNG_GALAXYBOOK
 	depends on I2C && OF
 	depends on POWER_SUPPLY && LEDS_CLASS
 	select ACPI_PLATFORM_PROFILE
+	select HINT
 	help
 	  Say Y here to enable the embedded controller driver for Samsung
 	  Galaxy Book4 Edge laptops. The driver reports battery and AC
 	  adapter status and controls keyboard backlight brightness through
 	  the ENE KB9058 EC mailbox, and handles the keyboard backlight
 	  brightness hotkey and fan policy platform profiles.
+	  Device hints report display activity to the EC.
 
 	  To compile this driver as a module, choose M here: the module
 	  will be called samsung-galaxybook-ec.

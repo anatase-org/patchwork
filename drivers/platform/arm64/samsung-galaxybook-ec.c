@@ -12,6 +12,8 @@
 #include <linux/cleanup.h>
 #include <linux/delay.h>
 #include <linux/errno.h>
+#include <linux/gpio/consumer.h>
+#include <linux/hint.h>
 #include <linux/i2c.h>
 #include <linux/interrupt.h>
 #include <linux/leds.h>
@@ -26,6 +28,7 @@
 
 #define GALAXYBOOK_EC_FLAGS		0x80
 #define GALAXYBOOK_EC_BAT_STATUS	0x84
+#define GALAXYBOOK_EC_OS_STATE		0x89
 #define GALAXYBOOK_EC_REMAINING		0xa0
 #define GALAXYBOOK_EC_BAT_VOLTAGE	0xa4
 #define GALAXYBOOK_EC_CAPACITY		0xb0
@@ -42,6 +45,7 @@
 #define GALAXYBOOK_EC_BAT_DISCHARGING	BIT(0)
 #define GALAXYBOOK_EC_BAT_CHARGING	BIT(1)
 #define GALAXYBOOK_EC_BAT_FULL		BIT(3)
+#define GALAXYBOOK_EC_OS_DISPLAY_ON	BIT(1)
 
 struct galaxybook_battery_data {
 	int status;
@@ -63,6 +67,10 @@ struct samsung_galaxybook_ec {
 	struct power_supply *ac;
 	struct led_classdev kbd_backlight;
 	struct device *profile_dev;
+	struct gpio_desc *host_sleep;
+	struct gpio_desc *hpd_control;
+	enum hint_idle_option idle;
+	bool suspended;
 	enum platform_profile_option profile;
 	/* Serializes mailbox transactions and cached supply/profile state. */
 	struct mutex lock;
@@ -269,6 +277,72 @@ static int galaxybook_ec_read_byte(struct i2c_client *client, u8 reg, u8 *value)
 
 	return galaxybook_ec_read_mailbox(client, 0xf480, value);
 }
+
+/* Caller holds ec->lock across the EC and GPIO display notifications. */
+static int galaxybook_ec_set_display_state(struct samsung_galaxybook_ec *ec, bool on)
+{
+	u8 data[] = { GALAXYBOOK_EC_OS_STATE, 0 };
+	u8 value;
+	int ret;
+
+	ret = galaxybook_ec_read_byte(ec->client, GALAXYBOOK_EC_OS_STATE, &value);
+	if (ret)
+		return ret;
+
+	data[1] = value & ~GALAXYBOOK_EC_OS_DISPLAY_ON;
+	if (on)
+		data[1] |= GALAXYBOOK_EC_OS_DISPLAY_ON;
+
+	if (data[1] != value) {
+		ret = galaxybook_ec_write_command(ec, 0x89, data, sizeof(data));
+		if (ret)
+			return ret;
+	}
+
+	/* Match PEP0's display notification: LDOS first, then MODS. */
+	gpiod_set_value_cansleep(ec->host_sleep, !on);
+	return 0;
+}
+
+static int galaxybook_idle_probe(void *drvdata, unsigned long *choices)
+{
+	*choices = BIT(HINT_IDLE_ACTIVE) | BIT(HINT_IDLE_INACTIVE);
+	return 0;
+}
+
+static int galaxybook_idle_get(struct device *dev, enum hint_idle_option *idle)
+{
+	struct samsung_galaxybook_ec *ec = dev_get_drvdata(dev);
+
+	guard(mutex)(&ec->lock);
+	*idle = ec->idle;
+	return 0;
+}
+
+static int galaxybook_idle_set(struct device *dev, enum hint_idle_option idle)
+{
+	struct samsung_galaxybook_ec *ec = dev_get_drvdata(dev);
+	int ret;
+
+	if (idle != HINT_IDLE_ACTIVE && idle != HINT_IDLE_INACTIVE)
+		return -EINVAL;
+
+	guard(mutex)(&ec->lock);
+	if (!ec->suspended) {
+		ret = galaxybook_ec_set_display_state(ec, idle == HINT_IDLE_ACTIVE);
+		if (ret)
+			return ret;
+	}
+
+	ec->idle = idle;
+	return 0;
+}
+
+static const struct hint_ops galaxybook_hint_ops = {
+	.idle_probe = galaxybook_idle_probe,
+	.idle_get = galaxybook_idle_get,
+	.idle_set = galaxybook_idle_set,
+};
 
 static int galaxybook_ec_read_word(struct i2c_client *client, u8 reg,
 				   unsigned int offset, int *value)
@@ -680,6 +754,7 @@ static int samsung_galaxybook_ec_probe(struct i2c_client *client)
 	struct samsung_galaxybook_ec *ec;
 	struct device_node *node, *bus;
 	struct i2c_adapter *adapter;
+	struct device *hint_dev;
 	u32 address;
 	int ret;
 
@@ -696,6 +771,16 @@ static int samsung_galaxybook_ec_probe(struct i2c_client *client)
 
 	ec->client = client;
 	mutex_init(&ec->lock);
+
+	ec->host_sleep = devm_gpiod_get_optional(&client->dev, "host-sleep", GPIOD_OUT_LOW);
+	if (IS_ERR(ec->host_sleep))
+		return dev_err_probe(&client->dev, PTR_ERR(ec->host_sleep),
+				     "failed to acquire host sleep GPIO\n");
+
+	ec->hpd_control = devm_gpiod_get_optional(&client->dev, "hpd-control", GPIOD_ASIS);
+	if (IS_ERR(ec->hpd_control))
+		return dev_err_probe(&client->dev, PTR_ERR(ec->hpd_control),
+				     "failed to acquire HPD control GPIO\n");
 
 	ret = galaxybook_battery_refresh(ec, &ec->data);
 	if (ret)
@@ -779,19 +864,63 @@ static int samsung_galaxybook_ec_probe(struct i2c_client *client)
 	if (ret)
 		return ret;
 
+	scoped_guard(mutex, &ec->lock)
+		ret = galaxybook_ec_set_display_state(ec, true);
+	if (ret)
+		return dev_err_probe(&client->dev, ret, "failed to notify EC of display state\n");
+
+	hint_dev = devm_hint_register(&client->dev, "samsung-galaxybook", ec,
+				      &galaxybook_hint_ops);
+	if (IS_ERR(hint_dev))
+		return dev_err_probe(&client->dev, PTR_ERR(hint_dev),
+				     "failed to register display hints\n");
+
 	galaxybook_external_power_changed(ec->ac);
 	return 0;
+}
+
+static int galaxybook_ec_suspend(struct device *dev)
+{
+	struct samsung_galaxybook_ec *ec = dev_get_drvdata(dev);
+	int ret;
+
+	disable_irq(ec->client->irq);
+
+	scoped_guard(mutex, &ec->lock) {
+		ret = galaxybook_ec_set_display_state(ec, false);
+		if (!ret) {
+			/* PEP0 leaves HPDC asserted after low-power idle. */
+			ret = gpiod_direction_output(ec->hpd_control, 1);
+			if (!ret) {
+				ec->suspended = true;
+				return 0;
+			}
+
+			galaxybook_ec_set_display_state(ec, ec->idle == HINT_IDLE_ACTIVE);
+		}
+	}
+
+	enable_irq(ec->client->irq);
+	return ret;
 }
 
 static int galaxybook_ec_resume(struct device *dev)
 {
 	struct samsung_galaxybook_ec *ec = dev_get_drvdata(dev);
+	int ret;
+
+	scoped_guard(mutex, &ec->lock) {
+		ret = galaxybook_ec_set_display_state(ec, ec->idle == HINT_IDLE_ACTIVE);
+		ec->suspended = false;
+	}
+	enable_irq(ec->client->irq);
 
 	galaxybook_external_power_changed(ec->ac);
-	return 0;
+	return ret;
 }
 
-static DEFINE_SIMPLE_DEV_PM_OPS(galaxybook_ec_pm_ops, NULL, galaxybook_ec_resume);
+static DEFINE_SIMPLE_DEV_PM_OPS(galaxybook_ec_pm_ops,
+			      galaxybook_ec_suspend, galaxybook_ec_resume);
 
 static const struct of_device_id samsung_galaxybook_ec_of_match[] = {
 	{ .compatible = "samsung,galaxybook4-edge-ec" },
