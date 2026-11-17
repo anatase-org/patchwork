@@ -10,6 +10,11 @@
 		     "qcom,x1e80100";
 };
 
+&ec {
+	host-sleep-gpios = <&tlmm 44 GPIO_ACTIVE_LOW>;
+	hpd-control-gpios = <&tlmm 49 GPIO_ACTIVE_HIGH>;
+};
+
 &i2c13 {
 	touchpad@40 {
 		compatible = "hid-over-i2c";
@@ -25,4 +30,8 @@
 
 &panel {
 	compatible = "samsung,atna40cu07", "samsung,atna33xc20";
+};
+
+&tlmm {
+	gpio-reserved-ranges = <35 1>, <45 3>;
 };

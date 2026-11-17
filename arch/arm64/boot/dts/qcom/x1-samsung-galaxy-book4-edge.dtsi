@@ -658,7 +658,7 @@
 	clock-frequency = <400000>;
 	status = "okay";
 
-	embedded-controller@64 {
+	ec: embedded-controller@64 {
 		compatible = "samsung,galaxybook4-edge-ec";
 		reg = <0x64>;
 		power-supplies = <&pdic0>, <&pdic1>;
