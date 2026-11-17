@@ -117,8 +117,10 @@ static void bcm_aggregate(struct qcom_icc_bcm *bcm)
 
 	if (bcm->keepalive && bcm->vote_x[QCOM_ICC_BUCKET_AMC] == 0 &&
 	    bcm->vote_y[QCOM_ICC_BUCKET_AMC] == 0) {
-		bcm->vote_x[QCOM_ICC_BUCKET_AMC] = 1;
-		bcm->vote_x[QCOM_ICC_BUCKET_WAKE] = 1;
+		if (!bcm->keepalive_peak_only) {
+			bcm->vote_x[QCOM_ICC_BUCKET_AMC] = 1;
+			bcm->vote_x[QCOM_ICC_BUCKET_WAKE] = 1;
+		}
 		bcm->vote_y[QCOM_ICC_BUCKET_AMC] = 1;
 		bcm->vote_y[QCOM_ICC_BUCKET_WAKE] = 1;
 	}

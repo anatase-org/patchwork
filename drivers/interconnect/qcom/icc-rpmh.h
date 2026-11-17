@@ -118,6 +118,7 @@ struct qcom_icc_node {
  * @enable_mask: optional mask to send as vote instead of vote_x/vote_y
  * @dirty: flag used to indicate whether the bcm needs to be committed
  * @keepalive: flag used to indicate whether a keepalive is required
+ * @keepalive_peak_only: leave average bandwidth unchanged for keepalive votes
  * @aux_data: auxiliary data used when calculating threshold values and
  * communicating with RPMh
  * @list: used to link to other bcms when compiling lists for commit
@@ -135,6 +136,7 @@ struct qcom_icc_bcm {
 	u32 enable_mask;
 	bool dirty;
 	bool keepalive;
+	bool keepalive_peak_only;
 	struct bcm_db aux_data;
 	struct list_head list;
 	struct list_head ws_list;
