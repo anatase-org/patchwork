@@ -124,6 +124,12 @@ static int spss_tpm_exchange(struct spss_tpm *spss, u16 command,
 	spss->pending = false;
 	spin_unlock_irqrestore(&spss->response_lock, flags);
 
+	if (ret == -ETIMEDOUT)
+		dev_err(spss->dev, "SPSS command %#x timed out: request=%#x status=%#x start=%#x\n",
+			command, get_unaligned_le32(spss->buffer),
+			get_unaligned_le32(spss->buffer + 4),
+			get_unaligned_le32(spss->buffer + 12));
+
 	return ret;
 }
 
@@ -191,6 +197,8 @@ static int spss_tpm_send(struct tpm_chip *chip, u8 *buffer, size_t capacity,
 	memcpy(spss->buffer + SZ_4K, buffer, command_size);
 	memset(response, 0, TPM_HEADER_SIZE);
 	put_unaligned_le32(0, control + 8);
+	/* Complete the command writes before giving firmware ownership. */
+	dma_wmb();
 	put_unaligned_le32(1, control + 12);
 	/* Publish the TPM command and start flag before ringing the SPSS doorbell. */
 	dma_wmb();
@@ -206,6 +214,8 @@ static int spss_tpm_send(struct tpm_chip *chip, u8 *buffer, size_t capacity,
 				false, control + 12);
 	if (ret) {
 		spss->broken = true;
+		dev_err(&chip->dev, "TPM command completion timed out: status=%#x\n",
+			get_unaligned_le32(control + 4));
 		return ret;
 	}
 
@@ -223,6 +233,8 @@ static int spss_tpm_send(struct tpm_chip *chip, u8 *buffer, size_t capacity,
 	    (tag != TPM2_ST_NO_SESSIONS && tag != TPM2_ST_SESSIONS))
 		return -EPROTO;
 
+	dev_dbg(&chip->dev, "TPM response: status=%#x size=%u\n",
+		get_unaligned_be32(response + 6), response_size);
 	memcpy(buffer, response, response_size);
 	ret = spss_tpm_request(spss, 2);
 	if (ret)
@@ -244,6 +256,8 @@ static int spss_tpm_request(struct spss_tpm *spss, u32 request)
 	if (get_unaligned_le32(spss->buffer) || get_unaligned_le32(spss->buffer + 12))
 		return -EBUSY;
 
+	/* Finish reading the response before firmware can reuse its buffer. */
+	dma_mb();
 	put_unaligned_le32(request, spss->buffer);
 	/* Publish the ready/idle request before notifying the SPSS application. */
 	dma_wmb();
@@ -256,6 +270,8 @@ static int spss_tpm_request(struct spss_tpm *spss, u32 request)
 				false, spss->buffer);
 	if (ret) {
 		spss->broken = true;
+		dev_err(spss->dev, "SPSS request %#x timed out: status=%#x\n",
+			request, get_unaligned_le32(spss->buffer + 4));
 		return ret;
 	}
 
