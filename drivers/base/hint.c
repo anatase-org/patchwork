@@ -15,7 +15,6 @@
 struct hint_handler {
 	const char *name;
 	struct device dev;
-	int minor;
 	struct mutex lock; /* Prevents parallel calls to class device. */
 	unsigned long idle_choices[BITS_TO_LONGS(HINT_IDLE_LAST)];
 	enum hint_idle_option idle;
@@ -164,7 +163,7 @@ struct device *hint_register(struct device *dev, const char *name,
 			     const struct hint_ops *ops)
 {
 	struct device *adev;
-	int minor, err;
+	int err;
 
 	/* Sanity check */
 	if (WARN_ON_ONCE(!dev || !name || !ops))
@@ -191,12 +190,11 @@ struct device *hint_register(struct device *dev, const char *name,
 	/* create class interface for handler */
 	handler->name = name;
 	handler->ops = ops;
-	handler->minor = minor;
 	handler->dev.class = &hint_class;
 	handler->dev.parent = dev;
 	mutex_init(&handler->lock);
 	dev_set_drvdata(&handler->dev, drvdata);
-	dev_set_name(&handler->dev, name, handler->minor);
+	dev_set_name(&handler->dev, "%s", name);
 
 	adev = &no_free_ptr(handler)->dev;
 	err = device_register(adev);
@@ -215,16 +213,10 @@ EXPORT_SYMBOL_GPL(hint_register);
  */
 void hint_remove(struct device *dev)
 {
-	struct hint_handler *handler;
-
 	if (IS_ERR_OR_NULL(dev))
 		return;
 
-	handler = to_hint_handler(dev);
-
-	guard(mutex)(&handler->lock);
-
-	device_unregister(&handler->dev);
+	device_unregister(dev);
 }
 EXPORT_SYMBOL_GPL(hint_remove);
 
