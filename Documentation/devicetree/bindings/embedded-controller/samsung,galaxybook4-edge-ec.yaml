@@ -46,6 +46,18 @@ properties:
   interrupts:
     maxItems: 1
 
+  host-sleep-gpios:
+    maxItems: 1
+    description:
+      Host sleep indication to the EC (MODS). Asserted when the OS display
+      is off and deasserted when it is on.
+
+  hpd-control-gpios:
+    maxItems: 1
+    description:
+      HPD control output (HPDC). Asserted before entering low-power idle
+      and left asserted on exit.
+
 required:
   - compatible
   - reg
@@ -67,6 +79,8 @@ allOf:
         interrupts: false
         samsung,event-interface: false
         power-supplies: false
+        host-sleep-gpios: false
+        hpd-control-gpios: false
 
 additionalProperties: false
 
