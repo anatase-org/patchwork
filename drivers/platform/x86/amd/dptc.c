@@ -233,6 +233,15 @@ static const char * const dptc_soc_table[] = {
 };
 
 static const struct dmi_system_id dptc_dmi_table[] = {
+	/* ADVAN */
+	{
+		.ident = "ADVAN X-PLAY",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "ADVAN"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ARP31B-070P2-XCL"),
+		},
+		.driver_data = (void *)&limits_28w,
+	},
 	/* Minisforum */
 	{
 		.ident = "Minisforum V3",
