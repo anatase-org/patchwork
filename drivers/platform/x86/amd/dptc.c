@@ -403,6 +403,14 @@ static const struct dmi_system_id dptc_dmi_table[] = {
 	},
 	/* OneXPlayer (Intel variants filtered by SoC table) */
 	{
+		.ident = "ONEXPLAYER F1 OLED",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER F1 OLED"),
+		},
+		.driver_data = (void *)&limits_30w,
+	},
+	{
 		.ident = "ONEXPLAYER F1L",
 		.matches = {
 			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
