@@ -600,10 +600,10 @@ static const struct dmi_system_id orientation_data[] = {
 		  DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "ONEXPLAYER F1Pro"),
 		},
 		.driver_data = (void *)&lcd1080x1920_leftside_up,
-	}, {	/* OneXPlayer OneXFly F1 Pro (OLED) LE Red variant */
+	}, {	/* OneXPlayer OneXFly F1 EVA variants */
 		.matches = {
 		  DMI_EXACT_MATCH(DMI_SYS_VENDOR, "ONE-NETBOOK"),
-		  DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "ONEXPLAYER F1 EVA-02"),
+		  DMI_MATCH(DMI_PRODUCT_NAME, "ONEXPLAYER F1 EVA"),
 		},
 		.driver_data = (void *)&lcd1080x1920_leftside_up,
 	}, {	/* OneXPlayer OneXFly F1 Pro (OLED) Hawk Point */
