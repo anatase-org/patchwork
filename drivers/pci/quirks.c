@@ -6604,3 +6604,23 @@ static void pci_mask_replay_timer_timeout(struct pci_dev *pdev)
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_GLI, 0x9750, pci_mask_replay_timer_timeout);
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_GLI, 0x9755, pci_mask_replay_timer_timeout);
 #endif
+
+/*
+ * On the ADVAN X-PLAY, the microSD root port (GPP7) can cause spurious
+ * s2idle wakeups even with an empty slot. Disable its wakeup by default.
+ */
+static void quirk_advan_xplay_disable_gpp7_wakeup(struct pci_dev *pdev)
+{
+	if (!device_may_wakeup(&pdev->dev) || pci_domain_nr(pdev->bus) ||
+	    pdev->bus->number || pdev->devfn != PCI_DEVFN(2, 3))
+		return;
+
+	if (!dmi_match(DMI_SYS_VENDOR, "ADVAN") ||
+	    !dmi_match(DMI_BOARD_NAME, "ARP31B-070P2-XCL"))
+		return;
+
+	device_set_wakeup_enable(&pdev->dev, false);
+	pci_info(pdev, "Disabling wakeup by default on ADVAN X-PLAY\n");
+}
+DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_AMD, 0x14ee,
+			quirk_advan_xplay_disable_gpp7_wakeup);
